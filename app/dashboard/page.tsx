@@ -3,10 +3,15 @@
 import Link from "next/link"
 import useSWR from "swr"
 import {
+  Activity,
   ArrowRight,
+  BarChart3,
   BookOpen,
   CheckCircle2,
-  Flame,
+  Clock3,
+  Gauge,
+  ListChecks,
+  ShieldCheck,
   Sparkles,
   Target,
   TrendingUp,
@@ -19,7 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { useAuth } from "@/lib/api/auth-context"
 import { localize, type Locale } from "@/lib/api/i18n"
-import type { SessionListItem, UserStats } from "@/lib/api/types"
+import type { AccessByExamItem, SessionListItem, UserExamStats, UserStats } from "@/lib/api/types"
 
 export default function DashboardHomePage() {
   const { user } = useAuth()
@@ -42,13 +47,14 @@ export default function DashboardHomePage() {
       : []
 
   const inProgress = sessionList.find((s) => s.status === "in_progress")
-  const bestScore =
-    stats?.bestScore ??
-    stats?.byExamType?.reduce<number | null>((best, item) => {
+  const bestExam =
+    stats?.byExamType?.reduce<UserExamStats | null>((best, item) => {
       if (item.bestScore == null) return best
-      return best == null ? item.bestScore : Math.max(best, item.bestScore)
-    }, null) ??
-    null
+      if (!best || best.bestScore == null || item.bestScore > best.bestScore) return item
+      return best
+    }, null) ?? null
+  const averageResult = stats ? `${Math.round(stats.averageScore)}%` : "—"
+  const bestResult = bestExam ? formatBestPoints(bestExam) : stats?.bestScore ?? "—"
 
   return (
     <div className="flex flex-col gap-6">
@@ -97,26 +103,33 @@ export default function DashboardHomePage() {
         />
         <StatCard
           icon={TrendingUp}
-          label="Средний балл"
-          value={stats?.averageScore ?? "—"}
+          label="Средний результат"
+          value={averageResult}
           loading={statsLoading}
           accent="blue"
         />
         <StatCard
           icon={Trophy}
           label="Лучший результат"
-          value={bestScore ?? "—"}
+          value={bestResult}
           loading={statsLoading}
           accent="amber"
         />
         <StatCard
-          icon={Flame}
-          label="Серия дней"
-          value={stats?.weeklyStreak ?? 0}
+          icon={Clock3}
+          label="В процессе"
+          value={stats?.inProgressSessionsCount ?? 0}
           loading={statsLoading}
           accent="orange"
         />
       </div>
+
+      <StatsDashboards
+        stats={stats}
+        loading={statsLoading}
+        locale={locale}
+        accessByExam={user?.accessByExam ?? []}
+      />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -209,6 +222,285 @@ export default function DashboardHomePage() {
   )
 }
 
+function StatsDashboards({
+  stats,
+  loading,
+  locale,
+  accessByExam,
+}: {
+  stats?: UserStats
+  loading: boolean
+  locale: Locale
+  accessByExam: AccessByExamItem[]
+}) {
+  const byExam = [...(stats?.byExamType ?? [])].sort(
+    (a, b) =>
+      (b.testsCount + (b.inProgressCount ?? 0)) -
+      (a.testsCount + (a.inProgressCount ?? 0)),
+  )
+  const totalStarted = (stats?.completedTests ?? 0) + (stats?.inProgressSessionsCount ?? 0)
+  const completionPct = totalStarted
+    ? Math.round(((stats?.completedTests ?? 0) / totalStarted) * 100)
+    : 0
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.8fr)]">
+      <ExamStatsPanel items={byExam} loading={loading} locale={locale} />
+      <div className="grid gap-6">
+        <ActivityPanel
+          stats={stats}
+          loading={loading}
+          totalStarted={totalStarted}
+          completionPct={completionPct}
+        />
+        <TrendPanel items={byExam} loading={loading} locale={locale} />
+        <AccessPanel items={accessByExam} loading={false} />
+      </div>
+    </div>
+  )
+}
+
+function ExamStatsPanel({
+  items,
+  loading,
+  locale,
+}: {
+  items: UserExamStats[]
+  loading: boolean
+  locale: Locale
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-4">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <BarChart3 className="size-4" />
+          Статистика по экзаменам
+        </CardTitle>
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/dashboard/exams">
+            Каталог
+            <ArrowRight className="size-3.5" />
+          </Link>
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-28 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : items.length === 0 ? (
+          <EmptyDashboard
+            icon={BarChart3}
+            title="Данных пока нет"
+            text="После первого завершённого пробника здесь появится разбивка по экзаменам."
+          />
+        ) : (
+          <ul className="flex flex-col divide-y divide-border">
+            {items.map((item) => {
+              const name = localize(item.examType?.name, locale, item.examSlug || "Экзамен")
+              const avg = clampPct(item.averageScore)
+              const correct = clampPct(item.averageCorrectPercent)
+              const attempts = item.testsCount + (item.inProgressCount ?? 0)
+              return (
+                <li key={item.examTypeId} className="py-4 first:pt-0 last:pb-0">
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate font-medium">{name}</p>
+                        {item.examSlug && (
+                          <Badge variant="secondary" className="font-mono uppercase">
+                            {item.examSlug}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <MiniMetric label="Попыток" value={attempts} />
+                        <MiniMetric label="Завершено" value={item.completedCount ?? item.testsCount} />
+                        <MiniMetric label="Лучшие баллы" value={formatBestPoints(item)} />
+                        <MiniMetric label="Среднее время" value={formatDuration(item.averageDurationSecs)} />
+                      </div>
+                    </div>
+                    <div className="flex flex-col justify-center gap-3">
+                      <ProgressLine label="Средний результат" value={avg} suffix="%" />
+                      <ProgressLine label="Точность" value={correct} suffix="%" />
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ActivityPanel({
+  stats,
+  loading,
+  totalStarted,
+  completionPct,
+}: {
+  stats?: UserStats
+  loading: boolean
+  totalStarted: number
+  completionPct: number
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Activity className="size-4" />
+          Активность
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-8 w-28" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm text-muted-foreground">Завершение пробников</span>
+                <span className="text-2xl font-semibold tabular-nums">{completionPct}%</span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-secondary">
+                <div className="h-full bg-foreground" style={{ width: `${completionPct}%` }} />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <MiniMetric label="Начато" value={totalStarted} icon={ListChecks} />
+              <MiniMetric label="Закончено" value={stats?.completedTests ?? 0} icon={CheckCircle2} />
+              <MiniMetric label="В процессе" value={stats?.inProgressSessionsCount ?? 0} icon={Clock3} />
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function TrendPanel({
+  items,
+  loading,
+  locale,
+}: {
+  items: UserExamStats[]
+  loading: boolean
+  locale: Locale
+}) {
+  const withScores = items.filter((item) => (item.recentScores?.length ?? 0) > 0).slice(0, 3)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Gauge className="size-4" />
+          Динамика результатов
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        ) : withScores.length === 0 ? (
+          <EmptyDashboard
+            icon={Gauge}
+            title="Динамика появится позже"
+            text="Нужно хотя бы несколько завершённых тестов с оценкой."
+          />
+        ) : (
+          <div className="flex flex-col gap-4">
+            {withScores.map((item) => (
+              <div key={item.examTypeId} className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-medium">
+                    {localize(item.examType?.name, locale, item.examSlug || "Экзамен")}
+                  </p>
+                  <span className="text-xs text-muted-foreground">
+                    {item.recentScores?.at(-1) ?? 0}%
+                  </span>
+                </div>
+                <div
+                  className="flex h-16 items-end gap-1 rounded-md border border-border bg-secondary/40 px-2 py-2"
+                  aria-label="Последние результаты"
+                >
+                  {(item.recentScores ?? []).map((score, idx) => {
+                    const height = Math.max(8, clampPct(score))
+                    return (
+                      <span
+                        key={`${item.examTypeId}-${idx}`}
+                        className="flex-1 rounded-sm bg-foreground/80"
+                        style={{ height: `${height}%` }}
+                        title={`${score}%`}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function AccessPanel({
+  items,
+  loading,
+}: {
+  items: AccessByExamItem[]
+  loading: boolean
+}) {
+  const visible = items.slice(0, 4)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ShieldCheck className="size-4" />
+          Доступ
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <Skeleton className="h-20 w-full" />
+        ) : visible.length === 0 ? (
+          <EmptyDashboard
+            icon={ShieldCheck}
+            title="Лимиты не загружены"
+            text="Доступ подтянется после обновления профиля."
+          />
+        ) : (
+          <ul className="flex flex-col divide-y divide-border">
+            {visible.map((item) => (
+              <li key={item.examTypeId} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium uppercase">{item.examSlug || "exam"}</p>
+                  <p className="text-xs text-muted-foreground">{formatAccessLine(item)}</p>
+                </div>
+                <Badge variant={item.hasAccess ? "default" : "outline"}>
+                  {item.hasAccess ? "Доступ есть" : accessReasonLabel(item.reasonCode)}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function StatCard({
   icon: Icon,
   label,
@@ -250,6 +542,105 @@ function StatCard({
       </CardContent>
     </Card>
   )
+}
+
+function MiniMetric({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string
+  value: string | number
+  icon?: React.ElementType
+}) {
+  return (
+    <div className="rounded-md border border-border bg-secondary/30 px-3 py-2">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        {Icon && <Icon className="size-3.5" />}
+        <span className="truncate">{label}</span>
+      </div>
+      <p className="mt-1 truncate text-sm font-semibold tabular-nums">{value}</p>
+    </div>
+  )
+}
+
+function ProgressLine({
+  label,
+  value,
+  suffix,
+}: {
+  label: string
+  value: number
+  suffix: string
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-medium tabular-nums">
+          {value}
+          {suffix}
+        </span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-secondary">
+        <div className="h-full bg-foreground" style={{ width: `${value}%` }} />
+      </div>
+    </div>
+  )
+}
+
+function EmptyDashboard({
+  icon: Icon,
+  title,
+  text,
+}: {
+  icon: React.ElementType
+  title: string
+  text: string
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 py-6 text-center">
+      <div className="flex size-10 items-center justify-center rounded-full bg-secondary">
+        <Icon className="size-4 text-muted-foreground" />
+      </div>
+      <div>
+        <p className="text-sm font-medium">{title}</p>
+        <p className="max-w-sm text-xs text-muted-foreground">{text}</p>
+      </div>
+    </div>
+  )
+}
+
+function clampPct(value: number | null | undefined): number {
+  if (value == null || !Number.isFinite(value)) return 0
+  return Math.max(0, Math.min(100, Math.round(value)))
+}
+
+function formatBestPoints(item: UserExamStats): string {
+  if (item.bestRawScore != null && item.bestMaxScore != null) {
+    return `${item.bestRawScore}/${item.bestMaxScore}`
+  }
+  if (item.bestScore != null) return `${Math.round(item.bestScore)}%`
+  return "—"
+}
+
+function formatDuration(seconds: number | null | undefined): string {
+  if (seconds == null || seconds <= 0) return "—"
+  const minutes = Math.round(seconds / 60)
+  return `${minutes} мин`
+}
+
+function accessReasonLabel(reason: AccessByExamItem["reasonCode"]): string {
+  if (reason === "DAILY_LIMIT_REACHED") return "Лимит дня"
+  if (reason === "TOTAL_LIMIT_EXHAUSTED") return "Лимит исчерпан"
+  if (reason === "NO_ENTITLEMENT") return "Нет доступа"
+  return "Нет доступа"
+}
+
+function formatAccessLine(item: AccessByExamItem): string {
+  if (item.daily.isUnlimited) return "Без дневного лимита"
+  if (item.daily.limit == null) return "Дневной лимит не задан"
+  return `Сегодня: ${item.daily.remaining ?? 0}/${item.daily.limit}`
 }
 
 function StatusBadge({ status }: { status: SessionListItem["status"] }) {
