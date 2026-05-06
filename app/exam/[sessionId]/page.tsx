@@ -29,6 +29,8 @@ import { ExamTimer } from "@/components/exam/timer"
 import { QuestionMedia } from "@/components/exam/question-media"
 import { Logo } from "@/components/landing/logo"
 import { api, ApiError } from "@/lib/api/client"
+import { useAuth } from "@/lib/api/auth-context"
+import { localize, type Locale } from "@/lib/api/i18n"
 import { cn } from "@/lib/utils"
 import type { Question, TestSession } from "@/lib/api/types"
 
@@ -50,6 +52,8 @@ export default function ExamSessionPage({
 }) {
   const { sessionId } = use(params)
   const router = useRouter()
+  const { user } = useAuth()
+  const locale = ((user?.preferredLanguage as Locale) || "ru") as Locale
   const { data: session, isLoading, error } = useSWR<TestSession>(
     `/tests/sessions/${sessionId}`,
   )
@@ -71,12 +75,12 @@ export default function ExamSessionPage({
         (sec.questions || []).map((q) => ({
           ...q,
           sectionId: sec.id,
-          sectionTitle: sec.title || sec.subjectName || "",
+          sectionTitle: localize(sec.title, locale) || localize(sec.subjectName, locale) || "",
         })),
       )
     }
     return (session.questions || []).map((q) => ({ ...q }))
-  }, [session])
+  }, [session, locale])
 
   // Initialise local state from server data once
   useEffect(() => {
@@ -223,7 +227,9 @@ export default function ExamSessionPage({
           <Link href="/dashboard" className="flex items-center gap-2 min-w-0">
             <Logo />
             <span className="hidden truncate text-sm font-semibold lowercase sm:inline">
-              {session.templateName || session.examTypeName || "Пробник"}
+              {localize(session.templateName, locale) ||
+                localize(session.examTypeName, locale) ||
+                "Пробник"}
             </span>
           </Link>
           <div className="flex items-center gap-2">
@@ -274,16 +280,25 @@ export default function ExamSessionPage({
 
           <Card>
             <CardContent className="flex flex-col gap-5 p-5 sm:p-6">
-              {current.text && (
-                <div className="prose prose-sm sm:prose-base max-w-none whitespace-pre-wrap leading-relaxed">
-                  {current.text}
-                </div>
-              )}
-              <QuestionMedia src={current.imageUrl} alt={current.subjectName} />
+              {(() => {
+                const qText = localize(current.text, locale)
+                const qSubject = localize(current.subjectName, locale)
+                return (
+                  <>
+                    {qText && (
+                      <div className="prose prose-sm sm:prose-base max-w-none whitespace-pre-wrap leading-relaxed">
+                        {qText}
+                      </div>
+                    )}
+                    <QuestionMedia src={current.imageUrl} alt={qSubject} />
+                  </>
+                )
+              })()}
 
               <div className="flex flex-col gap-2">
                 {current.options.map((opt, i) => {
                   const checked = selected.includes(opt.id)
+                  const optText = localize(opt.text, locale)
                   return (
                     <button
                       key={opt.id}
@@ -307,8 +322,8 @@ export default function ExamSessionPage({
                         {String.fromCharCode(65 + i)}
                       </span>
                       <div className="flex flex-col gap-2 min-w-0 flex-1">
-                        {opt.text && (
-                          <span className="text-sm leading-relaxed">{opt.text}</span>
+                        {optText && (
+                          <span className="text-sm leading-relaxed">{optText}</span>
                         )}
                         {opt.imageUrl && <QuestionMedia src={opt.imageUrl} />}
                       </div>

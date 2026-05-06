@@ -1,10 +1,14 @@
 // Shared API types for mytest
 
+import type { LocalizedText } from "./i18n"
+
 export interface User {
   id: string
   phone?: string | null
   username?: string | null
-  fullName?: string | null
+  fullName?: LocalizedText
+  firstName?: LocalizedText
+  lastName?: LocalizedText
   avatarUrl?: string | null
   preferredLanguage?: "ru" | "kk" | string | null
   timezone?: string | null
@@ -23,8 +27,8 @@ export interface AuthResponse {
 export interface ExamType {
   id: string
   code?: string
-  name: string
-  description?: string | null
+  name: LocalizedText
+  description?: LocalizedText
   isActive?: boolean
   iconUrl?: string | null
 }
@@ -33,7 +37,7 @@ export interface Subject {
   id: string
   examTypeId: string
   code?: string
-  name: string
+  name: LocalizedText
   isProfile?: boolean
   isMandatory?: boolean
 }
@@ -41,8 +45,8 @@ export interface Subject {
 export interface TestTemplate {
   id: string
   examTypeId: string
-  name: string
-  description?: string | null
+  name: LocalizedText
+  description?: LocalizedText
   durationMins?: number
   totalQuestions?: number
   isActive?: boolean
@@ -51,16 +55,16 @@ export interface TestTemplate {
 
 export interface AnswerOption {
   id: string
-  text?: string
+  text?: LocalizedText
   imageUrl?: string | null
 }
 
 export interface Question {
   id: string
-  text?: string
+  text?: LocalizedText
   imageUrl?: string | null
   subjectId?: string
-  subjectName?: string
+  subjectName?: LocalizedText
   options: AnswerOption[]
   selectedIds?: string[]
   multiSelect?: boolean
@@ -68,8 +72,8 @@ export interface Question {
 
 export interface SessionSection {
   id: string
-  title?: string
-  subjectName?: string
+  title?: LocalizedText
+  subjectName?: LocalizedText
   questions: Question[]
 }
 
@@ -81,9 +85,9 @@ export interface TestSession {
   durationMins?: number
   serverTimeRemaining?: number | null
   templateId?: string
-  templateName?: string
+  templateName?: LocalizedText
   examTypeId?: string
-  examTypeName?: string
+  examTypeName?: LocalizedText
   language?: "ru" | "kk"
   sections?: SessionSection[]
   questions?: Question[]
@@ -96,17 +100,17 @@ export interface SessionListItem {
   status: TestSession["status"]
   startedAt?: string
   finishedAt?: string | null
-  templateName?: string
-  examTypeName?: string
+  templateName?: LocalizedText
+  examTypeName?: LocalizedText
   totalScore?: number | null
   maxScore?: number | null
 }
 
 export interface ReviewQuestion {
   id: string
-  text?: string
+  text?: LocalizedText
   imageUrl?: string | null
-  subjectName?: string
+  subjectName?: LocalizedText
   options: (AnswerOption & { isCorrect?: boolean; isSelected?: boolean })[]
   isCorrect?: boolean
   hasExplanation?: boolean
@@ -114,8 +118,8 @@ export interface ReviewQuestion {
 
 export interface ReviewSection {
   id: string
-  title?: string
-  subjectName?: string
+  title?: LocalizedText
+  subjectName?: LocalizedText
   questions: ReviewQuestion[]
   correctCount?: number
   totalCount?: number
@@ -133,16 +137,21 @@ export interface ReviewResponse {
 
 export interface BillingPlan {
   id: string
-  code: string
-  name: string
-  description?: string | null
-  priceCents?: number
-  price?: number
+  code?: string
+  name: LocalizedText
+  description?: LocalizedText
+  // Backend uses priceKzt / originalPriceKzt; older clients may expect priceCents/price
+  priceKzt?: number | null
+  originalPriceKzt?: number | null
+  priceCents?: number | null
+  price?: number | null
   currency?: string
   durationDays?: number
   isPremium?: boolean
-  features?: string[]
+  features?: LocalizedText[]
   oldPrice?: number | null
+  // Backend "highlight" doubles as a "badge" string e.g. "популярно"
+  highlight?: string | null
   badge?: string | null
 }
 
@@ -160,18 +169,46 @@ export interface UserStats {
 
 export interface MistakesSummary {
   totalMistakes?: number
-  bySubject?: { subjectId: string; subjectName: string; count: number }[]
-  byExamType?: { examTypeId: string; examTypeName: string; count: number }[]
+  bySubject?: { subjectId: string; subjectName: LocalizedText; count: number }[]
+  byExamType?: { examTypeId: string; examTypeName: LocalizedText; count: number }[]
 }
 
 export interface LeaderboardEntry {
-  rank: number
-  userId: string
-  fullName?: string | null
+  rank?: number | null
+  position?: number | null
+  userId?: string | null
+  user?: {
+    id?: string
+    fullName?: LocalizedText
+    firstName?: LocalizedText
+    lastName?: LocalizedText
+    name?: LocalizedText
+    displayName?: LocalizedText
+    username?: string | null
+    phone?: string | null
+    avatarUrl?: string | null
+  } | null
+  fullName?: LocalizedText
+  firstName?: LocalizedText
+  lastName?: LocalizedText
+  name?: LocalizedText
+  displayName?: LocalizedText
   username?: string | null
+  phone?: string | null
   avatarUrl?: string | null
-  bestScore: number
-  totalTests?: number
+  // Multiple possible fields for the score
+  bestScore?: number | null
+  score?: number | null
+  totalScore?: number | null
+  total?: number | null
+  points?: number | null
+  value?: number | null
+  // Multiple possible fields for total tests
+  totalTests?: number | null
+  testsCount?: number | null
+  attempts?: number | null
+  attemptsCount?: number | null
+  [key: string]: unknown
 }
 
 // Admission

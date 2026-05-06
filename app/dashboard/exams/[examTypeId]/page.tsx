@@ -23,6 +23,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { api, ApiError } from "@/lib/api/client"
+import { useAuth } from "@/lib/api/auth-context"
+import { localize, type Locale } from "@/lib/api/i18n"
 import type { ExamType, Subject, TestSession, TestTemplate } from "@/lib/api/types"
 
 export default function ExamDetailPage({
@@ -32,6 +34,8 @@ export default function ExamDetailPage({
 }) {
   const { examTypeId } = use(params)
   const router = useRouter()
+  const { user } = useAuth()
+  const locale = ((user?.preferredLanguage as Locale) || "ru") as Locale
   const [selectedTemplate, setSelectedTemplate] = useState<TestTemplate | null>(null)
   const [language, setLanguage] = useState<"ru" | "kk">("ru")
   const [entScope, setEntScope] = useState<"mandatory" | "profile" | "full">("full")
@@ -40,10 +44,12 @@ export default function ExamDetailPage({
 
   const { data: types } = useSWR<ExamType[]>("/exams/types")
   const examType = (types || []).find((t) => t.id === examTypeId)
+  const examName = localize(examType?.name, locale, "Экзамен")
+  const examDescription = localize(examType?.description, locale)
   const isENT =
     examType?.code?.toLowerCase() === "ent" ||
-    examType?.name?.toLowerCase().includes("ент") ||
-    examType?.name?.toLowerCase().includes("ent")
+    examName.toLowerCase().includes("ент") ||
+    examName.toLowerCase().includes("ent")
 
   const { data: subjects, isLoading: subjLoading } = useSWR<Subject[]>(
     `/exams/types/${examTypeId}/subjects`,
@@ -94,11 +100,11 @@ export default function ExamDetailPage({
           <ArrowLeft className="size-3.5" />
           К каталогу
         </Link>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-          {examType?.name || "Экзамен"}
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+          {examName}
         </h1>
-        {examType?.description && (
-          <p className="mt-1 text-muted-foreground">{examType.description}</p>
+        {examDescription && (
+          <p className="mt-1 text-muted-foreground">{examDescription}</p>
         )}
       </div>
 
@@ -120,7 +126,7 @@ export default function ExamDetailPage({
                 variant={s.isMandatory ? "default" : "secondary"}
                 className="text-sm py-1.5 px-3 font-normal"
               >
-                {s.name}
+                {localize(s.name, locale, "Предмет")}
               </Badge>
             ))}
           </div>
@@ -143,43 +149,47 @@ export default function ExamDetailPage({
           </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
-            {(templates || []).map((t) => (
-              <Card
-                key={t.id}
-                className="relative overflow-hidden transition-all hover:border-foreground/40"
-              >
-                {t.isPremium && (
-                  <Badge className="absolute right-3 top-3 bg-amber-500 hover:bg-amber-500">
-                    <Crown className="size-3" />
-                    Premium
-                  </Badge>
-                )}
-                <CardHeader>
-                  <div className="flex size-10 items-center justify-center rounded-md bg-foreground text-background">
-                    <BookOpen className="size-5" />
-                  </div>
-                  <CardTitle className="text-lg leading-tight">{t.name}</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  {t.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-2">{t.description}</p>
+            {(templates || []).map((t) => {
+              const tName = localize(t.name, locale, "Пробник")
+              const tDescription = localize(t.description, locale)
+              return (
+                <Card
+                  key={t.id}
+                  className="relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-foreground/40 hover:shadow-md"
+                >
+                  {t.isPremium && (
+                    <Badge className="absolute right-3 top-3 bg-amber-500 hover:bg-amber-500">
+                      <Crown className="size-3" />
+                      Premium
+                    </Badge>
                   )}
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    {t.durationMins && (
-                      <span className="inline-flex items-center gap-1">
-                        <Clock className="size-3.5" />
-                        {t.durationMins} мин
-                      </span>
+                  <CardHeader>
+                    <div className="flex size-11 items-center justify-center rounded-lg bg-foreground text-background shadow-sm">
+                      <BookOpen className="size-5" />
+                    </div>
+                    <CardTitle className="text-lg leading-tight">{tName}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3">
+                    {tDescription && (
+                      <p className="text-sm text-muted-foreground line-clamp-2">{tDescription}</p>
                     )}
-                    {t.totalQuestions && <span>{t.totalQuestions} вопросов</span>}
-                  </div>
-                  <Button onClick={() => setSelectedTemplate(t)} className="mt-1">
-                    <Play className="size-4" />
-                    Начать
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      {t.durationMins && (
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="size-3.5" />
+                          {t.durationMins} мин
+                        </span>
+                      )}
+                      {t.totalQuestions && <span>{t.totalQuestions} вопросов</span>}
+                    </div>
+                    <Button onClick={() => setSelectedTemplate(t)} className="mt-1">
+                      <Play className="size-4" />
+                      Начать
+                    </Button>
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         )}
       </section>
@@ -187,7 +197,7 @@ export default function ExamDetailPage({
       <Dialog open={!!selectedTemplate} onOpenChange={(o) => !o && setSelectedTemplate(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{selectedTemplate?.name}</DialogTitle>
+            <DialogTitle>{localize(selectedTemplate?.name, locale, "Пробник")}</DialogTitle>
             <DialogDescription>
               Настройте параметры пробника перед запуском
             </DialogDescription>
@@ -248,7 +258,7 @@ export default function ExamDetailPage({
                             checked={profileSubjectIds.includes(s.id)}
                             onCheckedChange={() => toggleProfile(s.id)}
                           />
-                          <span className="text-sm">{s.name}</span>
+                          <span className="text-sm">{localize(s.name, locale, "Предмет")}</span>
                         </Label>
                       ))}
                     </div>

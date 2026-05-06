@@ -17,6 +17,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/lib/api/auth-context"
 import { api, ApiError, resolveMediaUrl } from "@/lib/api/client"
+import { localize, type Locale } from "@/lib/api/i18n"
 import type { User } from "@/lib/api/types"
 
 const TIMEZONES = [
@@ -42,10 +43,10 @@ export default function ProfilePage() {
     }
   }, [user])
 
-  const initials = (user?.fullName || user?.username || user?.phone || "U")
-    .toString()
-    .slice(0, 2)
-    .toUpperCase()
+  const locale = ((user?.preferredLanguage as Locale) || "ru") as Locale
+  const fullNameStr = localize(user?.fullName, locale)
+  const displayName = fullNameStr || user?.username || user?.phone || "U"
+  const initials = displayName.toString().slice(0, 2).toUpperCase()
 
   const onSave = async () => {
     setSaving(true)
@@ -82,7 +83,7 @@ export default function ProfilePage() {
             </Avatar>
             <div className="flex flex-col gap-0.5">
               <p className="font-medium text-lg">
-                {user?.fullName || user?.username || "Пользователь"}
+                {fullNameStr || user?.username || "Пользователь"}
               </p>
               <p className="text-sm text-muted-foreground">{user?.phone || "—"}</p>
             </div>

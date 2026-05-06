@@ -20,6 +20,7 @@ import { Logo } from "@/components/landing/logo"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { resolveMediaUrl } from "@/lib/api/client"
+import { localize, type Locale } from "@/lib/api/i18n"
 
 const nav = [
   { href: "/dashboard", label: "Обзор", icon: Home },
@@ -52,10 +53,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     )
   }
 
-  const initials = (user?.fullName || user?.username || user?.phone || "U")
-    .toString()
-    .slice(0, 2)
-    .toUpperCase()
+  const locale = ((user?.preferredLanguage as Locale) || "ru") as Locale
+  const fullNameStr = localize(user?.fullName, locale)
+  const displayName = fullNameStr || user?.username || user?.phone || "U"
+  const initials = displayName.toString().slice(0, 2).toUpperCase()
 
   return (
     <div className="min-h-svh bg-secondary/30">
@@ -128,7 +129,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="truncate text-sm font-medium">
-                  {user?.fullName || user?.username || user?.phone || "Профиль"}
+                  {fullNameStr || user?.username || user?.phone || "Профиль"}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">{user?.phone}</p>
               </div>

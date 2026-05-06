@@ -20,10 +20,14 @@ import {
 import { Slider } from "@/components/ui/slider"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { api, ApiError } from "@/lib/api/client"
+import { useAuth } from "@/lib/api/auth-context"
+import { localize, type Locale } from "@/lib/api/i18n"
 import type { ExamType, MistakesSummary, TestSession } from "@/lib/api/types"
 
 export default function MistakesPage() {
   const router = useRouter()
+  const { user } = useAuth()
+  const locale = ((user?.preferredLanguage as Locale) || "ru") as Locale
   const { data: summary, isLoading } = useSWR<MistakesSummary>("/tests/mistakes/summary")
   const { data: examTypes } = useSWR<ExamType[]>("/exams/types")
 
@@ -108,7 +112,9 @@ export default function MistakesPage() {
                     key={s.subjectId}
                     className="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2"
                   >
-                    <span className="truncate text-sm font-medium">{s.subjectName}</span>
+                    <span className="truncate text-sm font-medium">
+                      {localize(s.subjectName, locale, "Предмет")}
+                    </span>
                     <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold tabular-nums">
                       {s.count}
                     </span>
@@ -137,7 +143,7 @@ export default function MistakesPage() {
                   <SelectItem value="all">Все экзамены</SelectItem>
                   {(examTypes || []).map((t) => (
                     <SelectItem key={t.id} value={t.id}>
-                      {t.name}
+                      {localize(t.name, locale, "Экзамен")}
                     </SelectItem>
                   ))}
                 </SelectContent>
