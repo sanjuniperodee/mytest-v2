@@ -27,6 +27,8 @@ import {
 import { Logo } from "@/components/landing/logo"
 import { QuestionMedia } from "@/components/exam/question-media"
 import { api, ApiError } from "@/lib/api/client"
+import { useAuth } from "@/lib/api/auth-context"
+import { localize, type Locale } from "@/lib/api/i18n"
 import { cn } from "@/lib/utils"
 import type { ReviewResponse, ReviewSection } from "@/lib/api/types"
 
@@ -42,6 +44,8 @@ export default function ReviewPage({
   params: Promise<{ sessionId: string }>
 }) {
   const { sessionId } = use(params)
+  const { user } = useAuth()
+  const locale = ((user?.preferredLanguage as Locale) || "ru") as Locale
   const { data, isLoading, error } = useSWR<ReviewResponse>(
     `/tests/sessions/${sessionId}/review`,
   )
@@ -124,10 +128,11 @@ export default function ReviewPage({
                   const total = sec.totalCount ?? sec.questions.length
                   const correct = sec.correctCount ?? 0
                   const pct = total ? Math.round((correct / total) * 100) : 0
+                  const title = localize(sec.subjectName, locale) || localize(sec.title, locale) || "Раздел"
                   return (
                     <Card key={sec.id}>
                       <CardContent className="flex flex-col gap-2 p-4">
-                        <p className="text-sm font-medium">{sec.subjectName || sec.title}</p>
+                        <p className="text-sm font-medium">{title}</p>
                         <div className="flex items-baseline gap-2">
                           <span className="text-2xl font-semibold tabular-nums">
                             {correct}/{total}
@@ -143,93 +148,100 @@ export default function ReviewPage({
             )}
 
             {/* Sections + questions */}
-            {sections.map((sec) => (
-              <section key={sec.id}>
-                <h2 className="mb-3 text-lg font-semibold">
-                  {sec.subjectName || sec.title || "Раздел"}
-                </h2>
-                <Accordion type="multiple" className="flex flex-col gap-2">
-                  {sec.questions.map((q, idx) => (
-                    <AccordionItem
-                      key={q.id}
-                      value={q.id}
-                      className={cn(
-                        "rounded-lg border bg-card",
-                        q.isCorrect ? "border-emerald-200" : "border-rose-200",
-                      )}
-                    >
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                        <div className="flex w-full items-center gap-3 pr-2 text-left">
-                          {q.isCorrect ? (
-                            <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />
-                          ) : (
-                            <XCircle className="size-5 shrink-0 text-rose-600" />
+            {sections.map((sec) => {
+              const sectionTitle =
+                localize(sec.subjectName, locale) || localize(sec.title, locale) || "Раздел"
+              return (
+                <section key={sec.id}>
+                  <h2 className="mb-3 text-lg font-semibold">{sectionTitle}</h2>
+                  <Accordion type="multiple" className="flex flex-col gap-2">
+                    {sec.questions.map((q, idx) => {
+                      const qText = localize(q.text, locale)
+                      const qSubject = localize(q.subjectName, locale)
+                      return (
+                        <AccordionItem
+                          key={q.id}
+                          value={q.id}
+                          className={cn(
+                            "rounded-lg border bg-card",
+                            q.isCorrect ? "border-emerald-200" : "border-rose-200",
                           )}
-                          <span className="text-sm font-medium tabular-nums text-muted-foreground">
-                            №{idx + 1}
-                          </span>
-                          <span className="line-clamp-1 flex-1 text-sm font-normal">
-                            {q.text || q.subjectName || "Вопрос"}
-                          </span>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="border-t border-border px-4 py-4">
-                        <div className="flex flex-col gap-4">
-                          {q.text && (
-                            <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                              {q.text}
+                        >
+                          <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                            <div className="flex w-full items-center gap-3 pr-2 text-left">
+                              {q.isCorrect ? (
+                                <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />
+                              ) : (
+                                <XCircle className="size-5 shrink-0 text-rose-600" />
+                              )}
+                              <span className="text-sm font-medium tabular-nums text-muted-foreground">
+                                №{idx + 1}
+                              </span>
+                              <span className="line-clamp-1 flex-1 text-sm font-normal">
+                                {qText || qSubject || "Вопрос"}
+                              </span>
                             </div>
-                          )}
-                          <QuestionMedia src={q.imageUrl} alt={q.subjectName} />
-                          <div className="flex flex-col gap-2">
-                            {q.options.map((opt, i) => {
-                              const stateClass = opt.isCorrect
-                                ? "border-emerald-300 bg-emerald-50"
-                                : opt.isSelected
-                                  ? "border-rose-300 bg-rose-50"
-                                  : "border-border bg-card"
-                              return (
-                                <div
-                                  key={opt.id}
-                                  className={cn(
-                                    "flex items-start gap-3 rounded-md border px-4 py-3",
-                                    stateClass,
-                                  )}
-                                >
-                                  <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xs font-semibold">
-                                    {String.fromCharCode(65 + i)}
-                                  </span>
-                                  <div className="flex-1 min-w-0 flex flex-col gap-2">
-                                    {opt.text && (
-                                      <span className="text-sm leading-relaxed">{opt.text}</span>
-                                    )}
-                                    {opt.imageUrl && <QuestionMedia src={opt.imageUrl} />}
-                                  </div>
-                                  <div className="flex flex-col items-end gap-1">
-                                    {opt.isCorrect && (
-                                      <Badge className="bg-emerald-600 hover:bg-emerald-600">
-                                        Верно
-                                      </Badge>
-                                    )}
-                                    {opt.isSelected && !opt.isCorrect && (
-                                      <Badge variant="destructive">Ваш ответ</Badge>
-                                    )}
-                                  </div>
+                          </AccordionTrigger>
+                          <AccordionContent className="border-t border-border px-4 py-4">
+                            <div className="flex flex-col gap-4">
+                              {qText && (
+                                <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                                  {qText}
                                 </div>
-                              )
-                            })}
-                          </div>
+                              )}
+                              <QuestionMedia src={q.imageUrl} alt={qSubject} />
+                              <div className="flex flex-col gap-2">
+                                {q.options.map((opt, i) => {
+                                  const optText = localize(opt.text, locale)
+                                  const stateClass = opt.isCorrect
+                                    ? "border-emerald-300 bg-emerald-50"
+                                    : opt.isSelected
+                                      ? "border-rose-300 bg-rose-50"
+                                      : "border-border bg-card"
+                                  return (
+                                    <div
+                                      key={opt.id}
+                                      className={cn(
+                                        "flex items-start gap-3 rounded-md border px-4 py-3",
+                                        stateClass,
+                                      )}
+                                    >
+                                      <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-background text-xs font-semibold">
+                                        {String.fromCharCode(65 + i)}
+                                      </span>
+                                      <div className="flex-1 min-w-0 flex flex-col gap-2">
+                                        {optText && (
+                                          <span className="text-sm leading-relaxed">{optText}</span>
+                                        )}
+                                        {opt.imageUrl && <QuestionMedia src={opt.imageUrl} />}
+                                      </div>
+                                      <div className="flex flex-col items-end gap-1">
+                                        {opt.isCorrect && (
+                                          <Badge className="bg-emerald-600 hover:bg-emerald-600">
+                                            Верно
+                                          </Badge>
+                                        )}
+                                        {opt.isSelected && !opt.isCorrect && (
+                                          <Badge variant="destructive">Ваш ответ</Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
 
-                          {q.hasExplanation && (
-                            <ExplanationBlock sessionId={sessionId} questionId={q.id} />
-                          )}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
-              </section>
-            ))}
+                              {q.hasExplanation && (
+                                <ExplanationBlock sessionId={sessionId} questionId={q.id} />
+                              )}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      )
+                    })}
+                  </Accordion>
+                </section>
+              )
+            })}
           </>
         ) : null}
       </div>
