@@ -1,53 +1,80 @@
 "use client"
 
+import Link from "next/link"
 import { useState } from "react"
-import { Menu, X } from "lucide-react"
+import { Menu, X, LayoutDashboard } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/api/auth-context"
 
 const nav = [
   { label: "Возможности", href: "#features" },
   { label: "Предметы", href: "#subjects" },
   { label: "Как это работает", href: "#how" },
   { label: "Тарифы", href: "#pricing" },
-  { label: "Отзывы", href: "#reviews" },
+  { label: "Шансы поступления", href: "/admission", external: true },
 ]
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false)
+  const { isAuthenticated, isLoading } = useAuth()
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-3.5 sm:px-6">
-        <a href="#" className="flex items-center gap-2" aria-label="mytest — главная">
+        <Link href="/" className="flex items-center gap-2" aria-label="mytest — главная">
           <Logo />
           <span className="text-lg font-semibold tracking-tight lowercase">mytest</span>
-        </a>
+        </Link>
 
         <nav className="hidden items-center gap-7 lg:flex" aria-label="Главная навигация">
-          {nav.map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {item.label}
-            </a>
-          ))}
+          {nav.map((item) =>
+            item.external ? (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {item.label}
+              </Link>
+            ) : (
+              <a
+                key={item.href}
+                href={item.href}
+                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {item.label}
+              </a>
+            ),
+          )}
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
-          <a
-            href="#login"
-            className="px-3 py-2 text-sm font-medium text-foreground/80 transition-colors hover:text-foreground"
-          >
-            Войти
-          </a>
-          <a
-            href="#start"
-            className="inline-flex items-center justify-center rounded-full bg-foreground px-5 py-2.5 text-sm font-semibold text-background transition-all hover:opacity-90"
-          >
-            Начать пробный
-          </a>
+          {isLoading ? (
+            <span className="h-9 w-32 rounded-full bg-muted animate-pulse" aria-hidden />
+          ) : isAuthenticated ? (
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-foreground px-5 py-2.5 text-sm font-semibold text-background transition-all hover:opacity-90"
+            >
+              <LayoutDashboard className="size-4" />
+              Мой кабинет
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="px-3 py-2 text-sm font-medium text-foreground/80 transition-colors hover:text-foreground"
+              >
+                Войти
+              </Link>
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center rounded-full bg-foreground px-5 py-2.5 text-sm font-semibold text-background transition-all hover:opacity-90"
+              >
+                Начать пробный
+              </Link>
+            </>
+          )}
         </div>
 
         <button
@@ -69,29 +96,51 @@ export function SiteHeader() {
         )}
       >
         <div className="mx-auto flex max-w-7xl flex-col gap-1 px-4 py-3">
-          {nav.map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              onClick={() => setOpen(false)}
-              className="rounded-md px-2 py-3 text-base font-medium text-foreground/90 hover:bg-secondary"
-            >
-              {item.label}
-            </a>
-          ))}
+          {nav.map((item) =>
+            item.external ? (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                className="rounded-md px-2 py-3 text-base font-medium text-foreground/90 hover:bg-secondary"
+              >
+                {item.label}
+              </Link>
+            ) : (
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                className="rounded-md px-2 py-3 text-base font-medium text-foreground/90 hover:bg-secondary"
+              >
+                {item.label}
+              </a>
+            ),
+          )}
           <div className="mt-2 flex flex-col gap-2 border-t border-border/60 pt-3">
-            <a
-              href="#login"
-              className="rounded-full border border-border px-5 py-3 text-center text-sm font-medium"
-            >
-              Войти
-            </a>
-            <a
-              href="#start"
-              className="rounded-full bg-foreground px-5 py-3 text-center text-sm font-semibold text-background"
-            >
-              Начать пробный
-            </a>
+            {isAuthenticated ? (
+              <Link
+                href="/dashboard"
+                className="rounded-full bg-foreground px-5 py-3 text-center text-sm font-semibold text-background"
+              >
+                Мой кабинет
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="rounded-full border border-border px-5 py-3 text-center text-sm font-medium"
+                >
+                  Войти
+                </Link>
+                <Link
+                  href="/login"
+                  className="rounded-full bg-foreground px-5 py-3 text-center text-sm font-semibold text-background"
+                >
+                  Начать пробный
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
