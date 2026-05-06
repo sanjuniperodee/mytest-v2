@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { api, ApiError } from "@/lib/api/client"
 import { useAuth } from "@/lib/api/auth-context"
+import { getTelegramBotUsername } from "@/lib/telegram"
 import type { AuthResponse } from "@/lib/api/types"
 
 interface TgUser {
@@ -21,10 +22,10 @@ export function TelegramButton() {
   const router = useRouter()
   const { setSession } = useAuth()
   const containerRef = useRef<HTMLDivElement>(null)
-  const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME
+  const botUsername = getTelegramBotUsername()
 
   useEffect(() => {
-    if (!botUsername || !containerRef.current) return
+    if (!containerRef.current) return
 
     // Telegram widget calls window.<callbackName>
     ;(window as unknown as Record<string, (u: TgUser) => void>).onTelegramAuth = async (u: TgUser) => {
@@ -63,18 +64,6 @@ export function TelegramButton() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [botUsername])
-
-  if (!botUsername) {
-    return (
-      <button
-        type="button"
-        disabled
-        className="h-11 w-full rounded-md border border-border bg-muted text-sm text-muted-foreground flex items-center justify-center gap-2"
-      >
-        Telegram вход доступен только в Telegram-приложении
-      </button>
-    )
-  }
 
   return <div ref={containerRef} className="flex justify-center" />
 }

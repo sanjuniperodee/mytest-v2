@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -11,10 +10,13 @@ import { GoogleButton } from "@/components/auth/google-button"
 import { TelegramButton } from "@/components/auth/telegram-button"
 import { useAuth } from "@/lib/api/auth-context"
 import { Spinner } from "@/components/ui/spinner"
+import { getTelegramBotLink, getTelegramBotUsername } from "@/lib/telegram"
 
 export default function LoginPage() {
   const router = useRouter()
   const { isAuthenticated, isLoading } = useAuth()
+  const botUsername = getTelegramBotUsername()
+  const botLink = getTelegramBotLink("web")
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) router.replace("/dashboard")
@@ -47,7 +49,7 @@ export default function LoginPage() {
             <span className="size-1.5 rounded-full bg-foreground" /> Реальный формат ЕНТ
           </li>
           <li className="flex items-center gap-2">
-            <span className="size-1.5 rounded-full bg-foreground" /> Объяснение к каждому вопросу
+            <span className="size-1.5 rounded-full bg-foreground" /> Разбор вопросов после теста
           </li>
           <li className="flex items-center gap-2">
             <span className="size-1.5 rounded-full bg-foreground" /> Аналитика по предметам
@@ -89,11 +91,16 @@ export default function LoginPage() {
           <Separator className="my-6" />
 
           <p className="text-center text-sm text-muted-foreground">
-            Нет аккаунта?{" "}
-            <Link href="/login" className="font-medium text-foreground hover:underline">
-              Просто войдите по телефону
-            </Link>{" "}
-            — мы создадим его автоматически.
+            Для входа по телефону сначала{" "}
+            <a
+              href={botLink}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-foreground hover:underline"
+            >
+              привяжите номер в @{botUsername}
+            </a>
+            , затем вернитесь и получите код.
           </p>
         </CardContent>
       </Card>
