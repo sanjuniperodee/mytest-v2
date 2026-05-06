@@ -326,10 +326,17 @@ export interface LeaderboardEntry {
   bestScore?: number | null
   score?: number | null
   rawScore?: number | null
+  maxScore?: number | null
+  bestRawScore?: number | null
+  bestMaxScore?: number | null
   totalScore?: number | null
   total?: number | null
   points?: number | null
   value?: number | null
+  durationSecs?: number | null
+  finishedAt?: string | null
+  sessionId?: string | null
+  profileSubjects?: string[]
   totalTests?: number | null
   testsCount?: number | null
   attempts?: number | null

@@ -26,6 +26,7 @@ interface NormalizedEntry {
   username: string | null
   avatarUrl: string | null
   score: number
+  maxScore: number | null
   totalTests: number | null
   raw: LeaderboardEntry
 }
@@ -76,13 +77,16 @@ function normalizeEntry(entry: LeaderboardEntry, idx: number, locale: Locale): N
 
   const score =
     pickNumber(
-      entry.bestScore,
-      entry.score,
+      entry.rawScore,
+      entry.bestRawScore,
       entry.totalScore,
-      entry.total,
       entry.points,
       entry.value,
+      entry.bestScore,
+      entry.total,
+      entry.score,
     ) ?? 0
+  const maxScore = pickNumber(entry.maxScore, entry.bestMaxScore)
 
   const totalTests = pickNumber(
     entry.totalTests,
@@ -109,9 +113,16 @@ function normalizeEntry(entry: LeaderboardEntry, idx: number, locale: Locale): N
     username,
     avatarUrl,
     score,
+    maxScore,
     totalTests,
     raw: entry,
   }
+}
+
+function formatPoints(entry: Pick<NormalizedEntry, "score" | "maxScore">): string {
+  return entry.maxScore != null && entry.maxScore > 0
+    ? `${entry.score}/${entry.maxScore}`
+    : String(entry.score)
 }
 
 export default function LeaderboardPage() {
@@ -119,7 +130,9 @@ export default function LeaderboardPage() {
   const locale = ((user?.preferredLanguage as Locale) || "ru") as Locale
   const [limit, setLimit] = useState<(typeof LIMITS)[number]>(50)
   const { data, isLoading } = useSWR<
-    { items?: LeaderboardEntry[] } | LeaderboardEntry[] | { data?: LeaderboardEntry[] }
+    | { items?: LeaderboardEntry[]; me?: LeaderboardEntry | null }
+    | LeaderboardEntry[]
+    | { data?: LeaderboardEntry[]; me?: LeaderboardEntry | null }
   >(`/leaderboard/ent?limit=${limit}`)
 
   const rawItems: LeaderboardEntry[] = Array.isArray(data)
@@ -131,7 +144,11 @@ export default function LeaderboardPage() {
             : []))
 
   const items: NormalizedEntry[] = rawItems.map((e, i) => normalizeEntry(e, i, locale))
-  const myRank = items.find((it) => it.userId === user?.id)
+  const responseMe =
+    data && !Array.isArray(data) && "me" in data && data.me
+      ? normalizeEntry(data.me, rawItems.length, locale)
+      : null
+  const myRank = items.find((it) => it.userId === user?.id) || responseMe
   const podium = items.slice(0, 3)
   const rest = items.slice(3)
 
@@ -146,7 +163,7 @@ export default function LeaderboardPage() {
           Лидерборд ЕНТ
         </h1>
         <p className="text-muted-foreground">
-          Топ участников по лучшему результату пробного ЕНТ
+          Топ участников по набранным баллам пробного ЕНТ
         </p>
       </div>
 
@@ -171,7 +188,9 @@ export default function LeaderboardPage() {
           <Badge variant="outline" className="bg-secondary px-3 py-1.5">
             Ваш ранг: <span className="ml-1 font-semibold">#{myRank.rank}</span>
             <span className="ml-2 text-muted-foreground">·</span>
-            <span className="ml-2 font-semibold tabular-nums">{myRank.score}</span>
+            <span className="ml-2 font-semibold tabular-nums">
+              {formatPoints(myRank)} баллов
+            </span>
           </Badge>
         )}
       </div>
@@ -301,7 +320,8 @@ function PodiumCard({
         </Avatar>
         <div className="flex flex-col items-center gap-0.5 text-center">
           <p className="line-clamp-1 max-w-full text-sm font-medium">{entry.name}</p>
-          <p className="text-3xl font-semibold tabular-nums">{entry.score}</p>
+          <p className="text-3xl font-semibold tabular-nums">{formatPoints(entry)}</p>
+          <p className="text-xs text-muted-foreground">баллов</p>
           {entry.totalTests != null && (
             <p className="text-xs text-muted-foreground">{entry.totalTests} тестов</p>
           )}
@@ -344,7 +364,10 @@ function LeaderRow({
           <p className="text-xs text-muted-foreground">{entry.totalTests} тестов</p>
         )}
       </div>
-      <span className="text-base font-semibold tabular-nums">{entry.score}</span>
+      <div className="flex shrink-0 flex-col items-end">
+        <span className="text-base font-semibold tabular-nums">{formatPoints(entry)}</span>
+        <span className="text-xs text-muted-foreground">баллов</span>
+      </div>
     </li>
   )
 }
