@@ -1,6 +1,8 @@
 import type { Metadata } from "next"
 import { Manrope, Instrument_Serif } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
+import { Toaster } from "@/components/ui/sonner"
+import { Providers } from "@/components/providers"
 import "./globals.css"
 
 const manrope = Manrope({
@@ -40,7 +42,8 @@ export default function RootLayout({
   return (
     <html lang="ru" className={`${manrope.variable} ${instrumentSerif.variable} bg-background`}>
       <body className="font-sans antialiased">
-        {children}
+        <Providers>{children}</Providers>
+        <Toaster richColors closeButton position="top-right" />
         {process.env.NODE_ENV === "production" && <Analytics />}
       </body>
     </html>

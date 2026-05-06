@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { ArrowRight, CheckCircle2, Clock, Star } from "lucide-react"
 import { ExamPreview } from "./exam-preview"
 
@@ -29,13 +30,13 @@ export function Hero() {
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <a
-              href="#start"
+            <Link
+              href="/login"
               className="group inline-flex items-center justify-center gap-2 rounded-full bg-foreground px-6 py-3.5 text-sm font-semibold text-background transition-all hover:opacity-90 sm:text-base"
             >
               Пройти пробный бесплатно
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </a>
+            </Link>
             <a
               href="#how"
               className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-background px-6 py-3.5 text-sm font-semibold text-foreground transition-colors hover:bg-secondary sm:text-base"
