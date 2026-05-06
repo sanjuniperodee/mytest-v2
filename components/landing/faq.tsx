@@ -73,8 +73,8 @@ export function FAQ() {
 
         <p className="mt-10 text-center text-sm text-muted-foreground">
           Есть ещё вопросы?{" "}
-          <a href="#" className="font-medium text-foreground underline-offset-4 hover:underline">
-            Напиши нам в Telegram
+          <a href="#lead" className="font-medium text-foreground underline-offset-4 hover:underline">
+            Оставь заявку
           </a>
           .
         </p>
