@@ -1,7 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import type { ChangeEvent } from "react"
 import { toast } from "sonner"
+import { Camera, Trash2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -29,12 +31,16 @@ const TIMEZONES = [
   "Asia/Qostanay",
   "Asia/Qyzylorda",
 ]
+const AVATAR_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"]
+const MAX_AVATAR_BYTES = 3 * 1024 * 1024
 
 export default function ProfilePage() {
   const { user, refresh } = useAuth()
+  const avatarInputRef = useRef<HTMLInputElement>(null)
   const [language, setLanguage] = useState<"ru" | "kk">("ru")
   const [timezone, setTimezone] = useState("Asia/Almaty")
   const [saving, setSaving] = useState(false)
+  const [avatarSaving, setAvatarSaving] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -49,6 +55,52 @@ export default function ProfilePage() {
   const displayName =
     fullNameStr || user?.telegramUsername || user?.username || user?.phone || "U"
   const initials = displayName.toString().slice(0, 2).toUpperCase()
+  const avatarSrc = resolveMediaUrl(user?.avatarUrl)
+
+  const onAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file) return
+    if (!AVATAR_MIME_TYPES.includes(file.type)) {
+      toast.error("Загрузите изображение JPG, PNG или WebP")
+      return
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      toast.error("Аватарка должна быть меньше 3 МБ")
+      return
+    }
+
+    const formData = new FormData()
+    formData.append("file", file)
+    setAvatarSaving(true)
+    try {
+      await api<User>("/users/me/avatar", {
+        method: "POST",
+        formData,
+      })
+      await refresh()
+      toast.success("Аватарка обновлена")
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Не удалось загрузить аватарку")
+    } finally {
+      setAvatarSaving(false)
+    }
+  }
+
+  const onDeleteAvatar = async () => {
+    setAvatarSaving(true)
+    try {
+      await api<User>("/users/me/avatar", {
+        method: "DELETE",
+      })
+      await refresh()
+      toast.success("Аватарка удалена")
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Не удалось удалить аватарку")
+    } finally {
+      setAvatarSaving(false)
+    }
+  }
 
   const onSave = async () => {
     setSaving(true)
@@ -78,18 +130,61 @@ export default function ProfilePage() {
           <CardTitle>Аккаунт</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          <div className="flex items-center gap-4">
-            <Avatar className="size-16">
-              <AvatarImage src={resolveMediaUrl(user?.avatarUrl)} alt={initials} />
-              <AvatarFallback className="text-lg">{initials}</AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col gap-0.5">
-              <p className="font-medium text-lg">
-                {displayName === "U" ? "Пользователь" : displayName}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {user?.phone || user?.telegramUsername || "—"}
-              </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="relative size-20 shrink-0">
+              <Avatar className="size-20">
+                <AvatarImage
+                  src={avatarSrc}
+                  alt={displayName === "U" ? "Пользователь" : displayName}
+                />
+                <AvatarFallback className="text-xl">{initials}</AvatarFallback>
+              </Avatar>
+              {avatarSaving && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-background/70">
+                  <Spinner className="size-5" />
+                </div>
+              )}
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-3">
+              <div className="min-w-0">
+                <p className="truncate font-medium text-lg">
+                  {displayName === "U" ? "Пользователь" : displayName}
+                </p>
+                <p className="truncate text-sm text-muted-foreground">
+                  {user?.phone || user?.telegramUsername || "—"}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  onChange={onAvatarChange}
+                  aria-label="Загрузить аватарку"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={avatarSaving}
+                >
+                  <Camera className="size-4" />
+                  Загрузить фото
+                </Button>
+                {user?.avatarUrl && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={onDeleteAvatar}
+                    disabled={avatarSaving}
+                  >
+                    <Trash2 className="size-4" />
+                    Удалить
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">JPG, PNG или WebP до 3 МБ.</p>
             </div>
           </div>
 
