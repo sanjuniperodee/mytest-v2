@@ -21,9 +21,9 @@ const groups = [
     title: "Компания",
     links: [
       { label: "О нас", href: "#" },
-      { label: "Контакты", href: "#" },
-      { label: "Для школ", href: "#" },
-      { label: "Стать преподавателем", href: "#" },
+      { label: "Контакты", href: "#lead" },
+      { label: "Для школ", href: "#lead" },
+      { label: "Стать преподавателем", href: "#lead" },
     ],
   },
 ]
