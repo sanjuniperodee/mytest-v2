@@ -1,8 +1,60 @@
 "use client"
 
-import { ArrowRight } from "lucide-react"
+import { useState } from "react"
+import type { FormEvent } from "react"
+import { ArrowRight, CheckCircle2 } from "lucide-react"
+import { api, ApiError } from "@/lib/api/client"
+
+type LeadStatus = "idle" | "success" | "error"
 
 export function CTA() {
+  const [name, setName] = useState("")
+  const [phone, setPhone] = useState("")
+  const [message, setMessage] = useState("")
+  const [status, setStatus] = useState<LeadStatus>("idle")
+  const [error, setError] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (submitting) return
+
+    const trimmedName = name.trim()
+    const trimmedPhone = phone.trim()
+    const trimmedMessage = message.trim()
+
+    if (trimmedName.length < 2 || trimmedPhone.length < 5) {
+      setStatus("error")
+      setError("Укажите имя и корректный номер телефона.")
+      return
+    }
+
+    setSubmitting(true)
+    setStatus("idle")
+    setError("")
+    try {
+      await api<{ ok: true }>("/leads", {
+        method: "POST",
+        auth: false,
+        body: {
+          name: trimmedName,
+          phone: trimmedPhone,
+          message: trimmedMessage || undefined,
+          source: "mytest-v2-landing",
+        },
+      })
+      setName("")
+      setPhone("")
+      setMessage("")
+      setStatus("success")
+    } catch (err) {
+      setStatus("error")
+      setError(err instanceof ApiError ? err.message : "Не удалось отправить заявку.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <section id="start" className="border-b border-border/60">
       <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28">
@@ -28,30 +80,80 @@ export function CTA() {
             </p>
 
             <form
-              className="mx-auto mt-10 flex max-w-md flex-col gap-2 sm:flex-row"
-              onSubmit={(e) => e.preventDefault()}
+              id="lead"
+              className="mx-auto mt-10 grid max-w-2xl gap-3 text-left sm:grid-cols-2"
+              onSubmit={handleSubmit}
             >
-              <label htmlFor="cta-email" className="sr-only">
-                Email
+              <label className="flex flex-col gap-1.5">
+                <span className="px-1 text-xs font-medium text-background/70">Имя</span>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  required
+                  minLength={2}
+                  maxLength={100}
+                  autoComplete="name"
+                  placeholder="Айдана"
+                  className="h-12 w-full rounded-full border border-background/20 bg-background/10 px-5 text-sm text-background placeholder:text-background/50 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
+                />
               </label>
-              <input
-                id="cta-email"
-                type="email"
-                required
-                placeholder="твой@email.kz"
-                className="h-12 w-full rounded-full border border-background/20 bg-background/10 px-5 text-sm text-background placeholder:text-background/50 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
-              />
+              <label className="flex flex-col gap-1.5">
+                <span className="px-1 text-xs font-medium text-background/70">Телефон</span>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  required
+                  minLength={5}
+                  maxLength={30}
+                  autoComplete="tel"
+                  placeholder="+7 700 000 00 00"
+                  className="h-12 w-full rounded-full border border-background/20 bg-background/10 px-5 text-sm text-background placeholder:text-background/50 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 sm:col-span-2">
+                <span className="px-1 text-xs font-medium text-background/70">
+                  Комментарий
+                </span>
+                <textarea
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  maxLength={1000}
+                  rows={3}
+                  placeholder="Например: хочу подключить класс или узнать про тарифы"
+                  className="min-h-24 w-full resize-none rounded-3xl border border-background/20 bg-background/10 px-5 py-3 text-sm text-background placeholder:text-background/50 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
+                />
+              </label>
               <button
                 type="submit"
-                className="group inline-flex h-12 items-center justify-center gap-2 rounded-full bg-accent px-6 text-sm font-semibold text-accent-foreground hover:opacity-90"
+                disabled={submitting}
+                className="group inline-flex h-12 items-center justify-center gap-2 rounded-full bg-accent px-6 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-60 sm:col-span-2"
               >
-                Начать пробный
+                {submitting ? "Отправляем..." : "Оставить заявку"}
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </button>
+              {status === "success" && (
+                <p
+                  role="status"
+                  className="flex items-center justify-center gap-2 text-center text-sm font-medium text-accent sm:col-span-2"
+                >
+                  <CheckCircle2 className="size-4" />
+                  Заявка отправлена. Мы скоро свяжемся с вами.
+                </p>
+              )}
+              {status === "error" && (
+                <p
+                  role="alert"
+                  className="text-center text-sm font-medium text-red-200 sm:col-span-2"
+                >
+                  {error || "Не удалось отправить заявку."}
+                </p>
+              )}
             </form>
 
             <p className="mt-4 text-xs text-background/60">
-              Регистрируясь, ты соглашаешься с{" "}
+              Отправляя заявку, ты соглашаешься с{" "}
               <a href="#" className="underline underline-offset-4">
                 условиями
               </a>{" "}
