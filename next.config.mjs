@@ -4,7 +4,24 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    unoptimized: true,
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "mytest.kz",
+      },
+      {
+        protocol: "https",
+        hostname: "**.mytest.kz",
+      },
+      {
+        protocol: "https",
+        hostname: "bilimland.kz",
+      },
+      {
+        protocol: "https",
+        hostname: "**.bilimland.kz",
+      },
+    ],
   },
 }
 

@@ -1,8 +1,31 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { Logo } from "@/components/landing/logo"
 import { Button } from "@/components/ui/button"
 import { SiteFooter } from "@/components/landing/site-footer"
+
+export const metadata: Metadata = {
+  title: "Калькулятор поступления 2026 — куда пройти с баллами ЕНТ",
+  description:
+    "Узнай, на какие специальности и в какие вузы Казахстана ты проходишь по грантовым и сельским квотам. Введи баллы ЕНТ — получи список подходящих программ.",
+  keywords: [
+    "калькулятор поступления",
+    "пороговые баллы ЕНТ",
+    "грант 2026",
+    "поступление вузы Казахстан",
+    "проходные баллы",
+  ],
+  openGraph: {
+    title: "Калькулятор поступления 2026 | mytest",
+    description:
+      "Узнай, на какие специальности ты проходишь. Введи баллы ЕНТ — получи список подходящих вузов и программ.",
+    images: ["/og-image.png"],
+  },
+  alternates: {
+    canonical: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://mytest.kz"}/admission`,
+  },
+}
 
 export default function AdmissionLayout({ children }: { children: React.ReactNode }) {
   return (
