@@ -1,0 +1,491 @@
+"use client"
+
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import useSWR from "swr"
+import { toast } from "sonner"
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Flag,
+  ListChecks,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Spinner } from "@/components/ui/spinner"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { ExamTimer } from "@/components/exam/timer"
+import { QuestionMedia } from "@/components/exam/question-media"
+import { Logo } from "@/components/landing/logo"
+import { api, ApiError } from "@/lib/api/client"
+import { cn } from "@/lib/utils"
+import type { Question, TestSession } from "@/lib/api/types"
+
+interface FlatQuestion extends Question {
+  sectionId?: string
+  sectionTitle?: string
+}
+
+interface AnswerResponse {
+  id: string
+  selectedIds: string[]
+  serverTimeRemaining?: number | null
+}
+
+export default function ExamSessionPage({
+  params,
+}: {
+  params: Promise<{ sessionId: string }>
+}) {
+  const { sessionId } = use(params)
+  const router = useRouter()
+  const { data: session, isLoading, error } = useSWR<TestSession>(
+    `/tests/sessions/${sessionId}`,
+  )
+
+  const [answers, setAnswers] = useState<Record<string, string[]>>({})
+  const [activeIdx, setActiveIdx] = useState(0)
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [remaining, setRemaining] = useState<number | null>(null)
+  const [showFinish, setShowFinish] = useState(false)
+  const [showNav, setShowNav] = useState(false)
+  const [finishing, setFinishing] = useState(false)
+  const initRef = useRef(false)
+
+  // Flatten sections/questions so we can navigate linearly while keeping section context
+  const flat = useMemo<FlatQuestion[]>(() => {
+    if (!session) return []
+    if (session.sections && session.sections.length > 0) {
+      return session.sections.flatMap((sec) =>
+        (sec.questions || []).map((q) => ({
+          ...q,
+          sectionId: sec.id,
+          sectionTitle: sec.title || sec.subjectName || "",
+        })),
+      )
+    }
+    return (session.questions || []).map((q) => ({ ...q }))
+  }, [session])
+
+  // Initialise local state from server data once
+  useEffect(() => {
+    if (!session || initRef.current) return
+    initRef.current = true
+    const initial: Record<string, string[]> = {}
+    for (const q of flat) {
+      if (q.selectedIds && q.selectedIds.length > 0) {
+        initial[q.id] = q.selectedIds
+      }
+    }
+    setAnswers(initial)
+    if (session.serverTimeRemaining != null) {
+      setRemaining(session.serverTimeRemaining)
+    } else if (session.durationMins && session.startedAt) {
+      const started = new Date(session.startedAt).getTime()
+      const ends = started + session.durationMins * 60 * 1000
+      setRemaining(Math.max(0, Math.round((ends - Date.now()) / 1000)))
+    }
+  }, [session, flat])
+
+  // Redirect already-finished session to review
+  useEffect(() => {
+    if (session && session.status !== "in_progress") {
+      router.replace(`/exam/${sessionId}/review`)
+    }
+  }, [session, sessionId, router])
+
+  // Tick down timer
+  useEffect(() => {
+    if (remaining == null) return
+    const id = window.setInterval(() => {
+      setRemaining((r) => (r == null ? r : r - 1))
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [remaining])
+
+  // Auto-finish on timeout
+  const finish = useCallback(
+    async (reason?: "timeout") => {
+      if (finishing) return
+      setFinishing(true)
+      try {
+        await api(`/tests/sessions/${sessionId}/finish`, { method: "POST" })
+        if (reason === "timeout") toast.message("Время вышло, тест завершён")
+        else toast.success("Тест завершён")
+        router.replace(`/exam/${sessionId}/review`)
+      } catch (err) {
+        toast.error(err instanceof ApiError ? err.message : "Не удалось завершить тест")
+        setFinishing(false)
+      }
+    },
+    [finishing, router, sessionId],
+  )
+
+  useEffect(() => {
+    if (remaining != null && remaining <= 0) {
+      finish("timeout")
+    }
+  }, [remaining, finish])
+
+  const submitAnswer = useCallback(
+    async (questionId: string, selectedIds: string[]) => {
+      setSavingId(questionId)
+      try {
+        const res = await api<AnswerResponse>(
+          `/tests/sessions/${sessionId}/answer`,
+          {
+            method: "POST",
+            body: { questionId, selectedIds },
+          },
+        )
+        if (res.serverTimeRemaining != null) {
+          setRemaining(res.serverTimeRemaining)
+        }
+      } catch (err) {
+        toast.error(err instanceof ApiError ? err.message : "Ошибка сохранения ответа")
+      } finally {
+        setSavingId((cur) => (cur === questionId ? null : cur))
+      }
+    },
+    [sessionId],
+  )
+
+  const onSelect = (q: FlatQuestion, optionId: string) => {
+    const current = answers[q.id] || []
+    let next: string[]
+    if (q.multiSelect) {
+      next = current.includes(optionId)
+        ? current.filter((x) => x !== optionId)
+        : [...current, optionId]
+    } else {
+      next = [optionId]
+    }
+    setAnswers((a) => ({ ...a, [q.id]: next }))
+    submitAnswer(q.id, next)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
+        <Skeleton className="h-12 w-1/2" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-md p-6 text-center">
+        <Card>
+          <CardContent className="py-10 flex flex-col items-center gap-3">
+            <AlertTriangle className="size-8 text-rose-500" />
+            <p className="font-semibold">Не удалось загрузить сессию</p>
+            <p className="text-sm text-muted-foreground">
+              {(error as ApiError).message || "Попробуйте обновить страницу"}
+            </p>
+            <Button asChild>
+              <Link href="/dashboard/exams">К каталогу</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!session || flat.length === 0) {
+    return null
+  }
+
+  const current = flat[activeIdx]
+  const total = flat.length
+  const answered = Object.keys(answers).filter((id) => (answers[id] || []).length > 0).length
+  const progress = Math.round((answered / total) * 100)
+  const selected = answers[current.id] || []
+
+  return (
+    <div className="flex min-h-svh flex-col">
+      {/* Top bar */}
+      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-3 px-4">
+          <Link href="/dashboard" className="flex items-center gap-2 min-w-0">
+            <Logo />
+            <span className="hidden truncate text-sm font-semibold lowercase sm:inline">
+              {session.templateName || session.examTypeName || "Пробник"}
+            </span>
+          </Link>
+          <div className="flex items-center gap-2">
+            <ExamTimer remaining={remaining} />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowNav(true)}
+              className="lg:hidden"
+            >
+              <ListChecks className="size-4" />
+              {answered}/{total}
+            </Button>
+            <Button size="sm" onClick={() => setShowFinish(true)}>
+              <Flag className="size-4" />
+              <span className="hidden sm:inline">Завершить</span>
+            </Button>
+          </div>
+        </div>
+        {/* progress bar */}
+        <div className="h-0.5 w-full bg-border">
+          <div
+            className="h-full bg-foreground transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </header>
+
+      <div className="mx-auto flex w-full max-w-7xl flex-1 gap-6 px-4 py-6 lg:py-8">
+        {/* Question */}
+        <div className="flex-1 min-w-0">
+          {current.sectionTitle && (
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {current.sectionTitle}
+            </p>
+          )}
+          <div className="mb-4 flex items-baseline justify-between gap-3">
+            <h1 className="text-xl font-semibold tracking-tight">
+              Вопрос {activeIdx + 1}{" "}
+              <span className="text-muted-foreground font-normal">/ {total}</span>
+            </h1>
+            {savingId === current.id && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Spinner className="size-3" /> Сохраняем
+              </span>
+            )}
+          </div>
+
+          <Card>
+            <CardContent className="flex flex-col gap-5 p-5 sm:p-6">
+              {current.text && (
+                <div className="prose prose-sm sm:prose-base max-w-none whitespace-pre-wrap leading-relaxed">
+                  {current.text}
+                </div>
+              )}
+              <QuestionMedia src={current.imageUrl} alt={current.subjectName} />
+
+              <div className="flex flex-col gap-2">
+                {current.options.map((opt, i) => {
+                  const checked = selected.includes(opt.id)
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => onSelect(current, opt.id)}
+                      className={cn(
+                        "flex items-start gap-3 rounded-md border px-4 py-3 text-left transition-colors",
+                        checked
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border bg-card hover:border-foreground/40 hover:bg-secondary/40",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
+                          checked
+                            ? "border-background bg-background text-foreground"
+                            : "border-border bg-secondary text-muted-foreground",
+                        )}
+                      >
+                        {String.fromCharCode(65 + i)}
+                      </span>
+                      <div className="flex flex-col gap-2 min-w-0 flex-1">
+                        {opt.text && (
+                          <span className="text-sm leading-relaxed">{opt.text}</span>
+                        )}
+                        {opt.imageUrl && <QuestionMedia src={opt.imageUrl} />}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {current.multiSelect && (
+                <p className="text-xs text-muted-foreground">
+                  Можно выбрать несколько вариантов
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setActiveIdx((i) => Math.max(0, i - 1))}
+              disabled={activeIdx === 0}
+            >
+              <ArrowLeft className="size-4" />
+              Назад
+            </Button>
+            {activeIdx < total - 1 ? (
+              <Button onClick={() => setActiveIdx((i) => Math.min(total - 1, i + 1))}>
+                Далее
+                <ArrowRight className="size-4" />
+              </Button>
+            ) : (
+              <Button onClick={() => setShowFinish(true)} variant="default">
+                <Flag className="size-4" />
+                Завершить
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Question grid (desktop) */}
+        <aside className="hidden w-72 shrink-0 lg:block">
+          <QuestionGrid
+            flat={flat}
+            answers={answers}
+            activeIdx={activeIdx}
+            onSelect={(i) => setActiveIdx(i)}
+            answered={answered}
+            total={total}
+          />
+        </aside>
+      </div>
+
+      {/* Question grid drawer (mobile) */}
+      <Dialog open={showNav} onOpenChange={setShowNav}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Все вопросы</DialogTitle>
+            <DialogDescription>
+              Отвечено {answered} из {total}
+            </DialogDescription>
+          </DialogHeader>
+          <QuestionGrid
+            flat={flat}
+            answers={answers}
+            activeIdx={activeIdx}
+            onSelect={(i) => {
+              setActiveIdx(i)
+              setShowNav(false)
+            }}
+            answered={answered}
+            total={total}
+            compact
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Finish confirmation */}
+      <Dialog open={showFinish} onOpenChange={setShowFinish}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Завершить тест?</DialogTitle>
+            <DialogDescription>
+              Вы ответили на {answered} из {total} вопросов. После завершения вернуться к
+              изменениям нельзя.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFinish(false)} disabled={finishing}>
+              Продолжить
+            </Button>
+            <Button onClick={() => finish()} disabled={finishing}>
+              {finishing ? (
+                <Spinner className="size-4" />
+              ) : (
+                <>
+                  <CheckCircle2 className="size-4" />
+                  Завершить
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+function QuestionGrid({
+  flat,
+  answers,
+  activeIdx,
+  onSelect,
+  answered,
+  total,
+  compact,
+}: {
+  flat: FlatQuestion[]
+  answers: Record<string, string[]>
+  activeIdx: number
+  onSelect: (i: number) => void
+  answered: number
+  total: number
+  compact?: boolean
+}) {
+  // group by sectionTitle
+  const groups: { title: string; items: { idx: number; q: FlatQuestion }[] }[] = []
+  flat.forEach((q, idx) => {
+    const title = q.sectionTitle || ""
+    const last = groups[groups.length - 1]
+    if (!last || last.title !== title) groups.push({ title, items: [{ idx, q }] })
+    else last.items.push({ idx, q })
+  })
+
+  return (
+    <div className={cn("flex flex-col gap-4", compact ? "" : "sticky top-20")}>
+      <div className="rounded-lg border border-border bg-card p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Прогресс
+        </p>
+        <p className="mt-1 text-2xl font-semibold tabular-nums">
+          {answered}/{total}
+        </p>
+      </div>
+      <div className="rounded-lg border border-border bg-card p-4">
+        {groups.map((g, gi) => (
+          <div key={gi} className={gi > 0 ? "mt-4" : ""}>
+            {g.title && (
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {g.title}
+              </p>
+            )}
+            <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-8 lg:grid-cols-5">
+              {g.items.map(({ idx, q }) => {
+                const isAnswered = (answers[q.id] || []).length > 0
+                const isActive = idx === activeIdx
+                return (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onClick={() => onSelect(idx)}
+                    className={cn(
+                      "flex h-9 w-full items-center justify-center rounded-md border text-xs font-semibold tabular-nums transition-colors",
+                      isActive
+                        ? "border-foreground bg-foreground text-background"
+                        : isAnswered
+                          ? "border-border bg-secondary text-foreground"
+                          : "border-border bg-background text-muted-foreground hover:border-foreground/40",
+                    )}
+                  >
+                    {idx + 1}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
