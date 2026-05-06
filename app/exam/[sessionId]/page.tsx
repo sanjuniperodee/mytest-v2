@@ -31,13 +31,9 @@ import { Logo } from "@/components/landing/logo"
 import { api, ApiError } from "@/lib/api/client"
 import { useAuth } from "@/lib/api/auth-context"
 import { localize, type Locale } from "@/lib/api/i18n"
+import { flattenSessionQuestions, type FlatSessionQuestion } from "@/lib/api/test-session"
 import { cn } from "@/lib/utils"
-import type { Question, TestSession } from "@/lib/api/types"
-
-interface FlatQuestion extends Question {
-  sectionId?: string
-  sectionTitle?: string
-}
+import type { TestSession } from "@/lib/api/types"
 
 interface AnswerResponse {
   id: string
@@ -67,19 +63,9 @@ export default function ExamSessionPage({
   const [finishing, setFinishing] = useState(false)
   const initRef = useRef(false)
 
-  // Flatten sections/questions so we can navigate linearly while keeping section context
-  const flat = useMemo<FlatQuestion[]>(() => {
+  const flat = useMemo<FlatSessionQuestion[]>(() => {
     if (!session) return []
-    if (session.sections && session.sections.length > 0) {
-      return session.sections.flatMap((sec) =>
-        (sec.questions || []).map((q) => ({
-          ...q,
-          sectionId: sec.id,
-          sectionTitle: localize(sec.title, locale) || localize(sec.subjectName, locale) || "",
-        })),
-      )
-    }
-    return (session.questions || []).map((q) => ({ ...q }))
+    return flattenSessionQuestions(session, locale)
   }, [session, locale])
 
   // Initialise local state from server data once
@@ -93,12 +79,8 @@ export default function ExamSessionPage({
       }
     }
     setAnswers(initial)
-    if (session.serverTimeRemaining != null) {
-      setRemaining(session.serverTimeRemaining)
-    } else if (session.durationMins && session.startedAt) {
-      const started = new Date(session.startedAt).getTime()
-      const ends = started + session.durationMins * 60 * 1000
-      setRemaining(Math.max(0, Math.round((ends - Date.now()) / 1000)))
+    if (session.timeRemaining != null) {
+      setRemaining(session.timeRemaining)
     }
   }, [session, flat])
 
@@ -165,7 +147,7 @@ export default function ExamSessionPage({
     [sessionId],
   )
 
-  const onSelect = (q: FlatQuestion, optionId: string) => {
+  const onSelect = (q: FlatSessionQuestion, optionId: string) => {
     const current = answers[q.id] || []
     let next: string[]
     if (q.multiSelect) {
@@ -227,9 +209,7 @@ export default function ExamSessionPage({
           <Link href="/dashboard" className="flex items-center gap-2 min-w-0">
             <Logo />
             <span className="hidden truncate text-sm font-semibold lowercase sm:inline">
-              {localize(session.templateName, locale) ||
-                localize(session.examTypeName, locale) ||
-                "Пробник"}
+              {localize(session.examType?.name, locale) || "Пробник"}
             </span>
           </Link>
           <div className="flex items-center gap-2">
@@ -281,24 +261,35 @@ export default function ExamSessionPage({
           <Card>
             <CardContent className="flex flex-col gap-5 p-5 sm:p-6">
               {(() => {
-                const qText = localize(current.text, locale)
                 const qSubject = localize(current.subjectName, locale)
                 return (
                   <>
-                    {qText && (
-                      <div className="prose prose-sm sm:prose-base max-w-none whitespace-pre-wrap leading-relaxed">
-                        {qText}
+                    {current.display.passage && (
+                      <div className="rounded-md border border-border bg-secondary/40 p-4 text-sm leading-relaxed whitespace-pre-wrap">
+                        {current.display.passage}
                       </div>
                     )}
-                    <QuestionMedia src={current.imageUrl} alt={qSubject} />
+                    {current.display.topicLine && (
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        {current.display.topicLine}
+                      </p>
+                    )}
+                    {current.display.stem && (
+                      <div className="prose prose-sm sm:prose-base max-w-none whitespace-pre-wrap leading-relaxed">
+                        {current.display.stem}
+                      </div>
+                    )}
+                    {current.imageUrls.map((url, index) => (
+                      <QuestionMedia key={`${current.id}-${index}`} src={url} alt={qSubject} />
+                    ))}
                   </>
                 )
               })()}
 
               <div className="flex flex-col gap-2">
-                {current.options.map((opt, i) => {
+                {current.answerOptions.map((opt, i) => {
                   const checked = selected.includes(opt.id)
-                  const optText = localize(opt.text, locale)
+                  const optText = localize(opt.content ?? opt.text, locale)
                   return (
                     <button
                       key={opt.id}
@@ -325,7 +316,6 @@ export default function ExamSessionPage({
                         {optText && (
                           <span className="text-sm leading-relaxed">{optText}</span>
                         )}
-                        {opt.imageUrl && <QuestionMedia src={opt.imageUrl} />}
                       </div>
                     </button>
                   )
@@ -440,7 +430,7 @@ function QuestionGrid({
   total,
   compact,
 }: {
-  flat: FlatQuestion[]
+  flat: FlatSessionQuestion[]
   answers: Record<string, string[]>
   activeIdx: number
   onSelect: (i: number) => void
@@ -449,7 +439,7 @@ function QuestionGrid({
   compact?: boolean
 }) {
   // group by sectionTitle
-  const groups: { title: string; items: { idx: number; q: FlatQuestion }[] }[] = []
+  const groups: { title: string; items: { idx: number; q: FlatSessionQuestion }[] }[] = []
   flat.forEach((q, idx) => {
     const title = q.sectionTitle || ""
     const last = groups[groups.length - 1]

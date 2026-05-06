@@ -24,7 +24,11 @@ import type { SessionListItem, UserStats } from "@/lib/api/types"
 export default function DashboardHomePage() {
   const { user } = useAuth()
   const locale = ((user?.preferredLanguage as Locale) || "ru") as Locale
-  const userName = localize(user?.fullName, locale) || user?.username || ""
+  const userName =
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
+    user?.telegramUsername ||
+    user?.username ||
+    ""
   const { data: stats, isLoading: statsLoading } = useSWR<UserStats>("/users/me/stats")
   const { data: sessions, isLoading: sessLoading } = useSWR<{ items: SessionListItem[] }>(
     "/tests/sessions?page=1&limit=5",
@@ -38,6 +42,13 @@ export default function DashboardHomePage() {
       : []
 
   const inProgress = sessionList.find((s) => s.status === "in_progress")
+  const bestScore =
+    stats?.bestScore ??
+    stats?.byExamType?.reduce<number | null>((best, item) => {
+      if (item.bestScore == null) return best
+      return best == null ? item.bestScore : Math.max(best, item.bestScore)
+    }, null) ??
+    null
 
   return (
     <div className="flex flex-col gap-6">
@@ -94,7 +105,7 @@ export default function DashboardHomePage() {
         <StatCard
           icon={Trophy}
           label="Лучший результат"
-          value={stats?.bestScore ?? "—"}
+          value={bestScore ?? "—"}
           loading={statsLoading}
           accent="amber"
         />
@@ -139,9 +150,7 @@ export default function DashboardHomePage() {
                     >
                       <div className="flex flex-col gap-1 min-w-0">
                         <p className="font-medium truncate">
-                          {localize(s.templateName, locale) ||
-                            localize(s.examTypeName, locale) ||
-                            "Пробный тест"}
+                          {localize(s.examType?.name, locale) || "Пробный тест"}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {s.startedAt
@@ -155,9 +164,9 @@ export default function DashboardHomePage() {
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
-                        {s.totalScore != null && s.maxScore != null && (
+                        {(s.rawScore != null || s.score != null) && s.maxScore != null && (
                           <span className="text-sm font-semibold tabular-nums">
-                            {s.totalScore}/{s.maxScore}
+                            {s.rawScore ?? s.score}/{s.maxScore}
                           </span>
                         )}
                         <StatusBadge status={s.status} />
@@ -276,4 +285,3 @@ function EmptySessions() {
     </div>
   )
 }
-

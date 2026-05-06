@@ -60,7 +60,7 @@ export default function ExamsPage() {
                       <BookOpen className="size-5" />
                     </div>
                     <Badge variant="secondary" className="font-mono uppercase tracking-wider">
-                      {ex.code || "EXAM"}
+                      {ex.slug || ex.code || "exam"}
                     </Badge>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">

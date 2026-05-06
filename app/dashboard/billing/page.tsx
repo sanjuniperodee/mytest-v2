@@ -13,7 +13,7 @@ import { useAuth } from "@/lib/api/auth-context"
 import { api, ApiError } from "@/lib/api/client"
 import { localize, type Locale } from "@/lib/api/i18n"
 import { cn } from "@/lib/utils"
-import type { BillingPlan } from "@/lib/api/types"
+import type { BillingPlan, CheckoutResponse } from "@/lib/api/types"
 
 interface NormalizedPlan {
   id: string
@@ -91,7 +91,7 @@ export default function BillingPage() {
         </p>
       </div>
 
-      {user?.isPremium && (
+      {user?.hasActiveSubscription && (
         <Card className="border-emerald-200 bg-emerald-50">
           <CardContent className="flex flex-col items-start gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
@@ -183,12 +183,13 @@ function PlanCard({
   const onCheckout = async () => {
     setLoading(true)
     try {
-      const res = await api<{ paymentUrl: string; orderId: string }>("/billing/checkout", {
+      const res = await api<CheckoutResponse>("/billing/checkout", {
         method: "POST",
         body: { planId: plan.id },
       })
-      if (res.paymentUrl) {
-        window.location.href = res.paymentUrl
+      const checkoutUrl = res.checkoutUrl || res.paymentUrl
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl
       } else {
         toast.error("Не удалось получить ссылку на оплату")
         setLoading(false)

@@ -54,8 +54,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   const locale = ((user?.preferredLanguage as Locale) || "ru") as Locale
-  const fullNameStr = localize(user?.fullName, locale)
-  const displayName = fullNameStr || user?.username || user?.phone || "U"
+  const firstLastName = [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim()
+  const fullNameStr = firstLastName || localize(user?.fullName, locale)
+  const displayName =
+    fullNameStr || user?.telegramUsername || user?.username || user?.phone || "U"
   const initials = displayName.toString().slice(0, 2).toUpperCase()
 
   return (
@@ -129,9 +131,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               </Avatar>
               <div className="flex-1 min-w-0">
                 <p className="truncate text-sm font-medium">
-                  {fullNameStr || user?.username || user?.phone || "Профиль"}
+                  {displayName === "U" ? "Профиль" : displayName}
                 </p>
-                <p className="truncate text-xs text-muted-foreground">{user?.phone}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {user?.phone || user?.telegramUsername || ""}
+                </p>
               </div>
             </Link>
             <button

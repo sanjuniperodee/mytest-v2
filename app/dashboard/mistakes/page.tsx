@@ -37,9 +37,19 @@ export default function MistakesPage() {
   const [duration, setDuration] = useState(30)
   const [starting, setStarting] = useState(false)
 
-  const total = summary?.totalMistakes ?? 0
-  const bySubject = summary?.bySubject ?? []
-  const byExam = summary?.byExamType ?? []
+  const total = summary?.openTotal ?? 0
+  const byExam = summary?.openByExam ?? []
+  const examsById = new Map<string, ExamType>(
+    (examTypes || []).map((exam) => [exam.id, exam]),
+  )
+  const examOptions = byExam.map((row) => {
+    const exam = examsById.get(row.examTypeId)
+    return {
+      id: row.examTypeId,
+      name: localize(exam?.name ?? row.examName, locale, "Экзамен"),
+      count: row.count,
+    }
+  })
 
   const start = async () => {
     setStarting(true)
@@ -55,7 +65,13 @@ export default function MistakesPage() {
       })
       router.push(`/exam/${session.id}`)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Не удалось запустить практику")
+      const message =
+        err instanceof ApiError && err.message === "EXAM_TYPE_REQUIRED"
+          ? "Выберите конкретный экзамен"
+          : err instanceof ApiError
+            ? err.message
+            : "Не удалось запустить практику"
+      toast.error(message)
       setStarting(false)
     }
   }
@@ -92,7 +108,7 @@ export default function MistakesPage() {
 
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">По предметам</CardTitle>
+            <CardTitle className="text-base">По экзаменам</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -101,22 +117,22 @@ export default function MistakesPage() {
                   <Skeleton key={i} className="h-9" />
                 ))}
               </div>
-            ) : bySubject.length === 0 ? (
+            ) : examOptions.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Пока нет ошибок — отлично!
               </p>
             ) : (
               <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {bySubject.map((s) => (
+                {examOptions.map((exam) => (
                   <li
-                    key={s.subjectId}
+                    key={exam.id}
                     className="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2"
                   >
                     <span className="truncate text-sm font-medium">
-                      {localize(s.subjectName, locale, "Предмет")}
+                      {exam.name}
                     </span>
                     <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold tabular-nums">
-                      {s.count}
+                      {exam.count}
                     </span>
                   </li>
                 ))}
@@ -141,9 +157,9 @@ export default function MistakesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Все экзамены</SelectItem>
-                  {(examTypes || []).map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {localize(t.name, locale, "Экзамен")}
+                  {examOptions.map((exam) => (
+                    <SelectItem key={exam.id} value={exam.id}>
+                      {exam.name} ({exam.count})
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -28,9 +28,10 @@ import { Logo } from "@/components/landing/logo"
 import { QuestionMedia } from "@/components/exam/question-media"
 import { api, ApiError } from "@/lib/api/client"
 import { useAuth } from "@/lib/api/auth-context"
-import { localize, type Locale } from "@/lib/api/i18n"
+import { localize, type Locale, type LocalizedText } from "@/lib/api/i18n"
+import { buildReviewSections, type ReviewSectionModel } from "@/lib/api/test-session"
 import { cn } from "@/lib/utils"
-import type { ReviewResponse, ReviewSection } from "@/lib/api/types"
+import type { ReviewResponse } from "@/lib/api/types"
 
 interface ExplanationData {
   questionId: string
@@ -50,13 +51,17 @@ export default function ReviewPage({
     `/tests/sessions/${sessionId}/review`,
   )
 
-  const sections: ReviewSection[] = useMemo(() => {
+  const sections: ReviewSectionModel[] = useMemo(() => {
     if (!data) return []
-    return data.sections || []
-  }, [data])
+    return buildReviewSections(data, locale)
+  }, [data, locale])
 
-  const overallCorrect = data?.correctCount ?? 0
-  const overallTotal = data?.totalQuestions ?? sections.reduce((s, sec) => s + (sec.totalCount ?? sec.questions.length), 0)
+  const overallCorrect =
+    data?.correctCount ?? sections.reduce((sum, sec) => sum + sec.correctCount, 0)
+  const overallTotal =
+    data?.totalQuestions ?? sections.reduce((sum, sec) => sum + sec.totalCount, 0)
+  const displayScore = data?.rawScore ?? data?.score ?? overallCorrect
+  const displayMax = data?.maxScore ?? overallTotal
   const accuracy = overallTotal ? Math.round((overallCorrect / overallTotal) * 100) : 0
 
   return (
@@ -101,10 +106,10 @@ export default function ReviewPage({
                   </p>
                   <div className="flex items-baseline gap-3">
                     <span className="text-5xl font-semibold tabular-nums">
-                      {data.totalScore ?? overallCorrect}
+                      {displayScore}
                     </span>
                     <span className="text-xl text-muted-foreground tabular-nums">
-                      / {data.maxScore ?? overallTotal}
+                      / {displayMax}
                     </span>
                   </div>
                   <div className="mt-2 flex items-center gap-3">
@@ -125,14 +130,13 @@ export default function ReviewPage({
             {sections.length > 1 && (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {sections.map((sec) => {
-                  const total = sec.totalCount ?? sec.questions.length
-                  const correct = sec.correctCount ?? 0
+                  const total = sec.totalCount
+                  const correct = sec.correctCount
                   const pct = total ? Math.round((correct / total) * 100) : 0
-                  const title = localize(sec.subjectName, locale) || localize(sec.title, locale) || "Раздел"
                   return (
                     <Card key={sec.id}>
                       <CardContent className="flex flex-col gap-2 p-4">
-                        <p className="text-sm font-medium">{title}</p>
+                        <p className="text-sm font-medium">{sec.title}</p>
                         <div className="flex items-baseline gap-2">
                           <span className="text-2xl font-semibold tabular-nums">
                             {correct}/{total}
@@ -149,14 +153,11 @@ export default function ReviewPage({
 
             {/* Sections + questions */}
             {sections.map((sec) => {
-              const sectionTitle =
-                localize(sec.subjectName, locale) || localize(sec.title, locale) || "Раздел"
               return (
                 <section key={sec.id}>
-                  <h2 className="mb-3 text-lg font-semibold">{sectionTitle}</h2>
+                  <h2 className="mb-3 text-lg font-semibold">{sec.title}</h2>
                   <Accordion type="multiple" className="flex flex-col gap-2">
                     {sec.questions.map((q, idx) => {
-                      const qText = localize(q.text, locale)
                       const qSubject = localize(q.subjectName, locale)
                       return (
                         <AccordionItem
@@ -164,12 +165,16 @@ export default function ReviewPage({
                           value={q.id}
                           className={cn(
                             "rounded-lg border bg-card",
-                            q.isCorrect ? "border-emerald-200" : "border-rose-200",
+                            q.isCorrect === true
+                              ? "border-emerald-200"
+                              : q.isCorrect === false
+                                ? "border-rose-200"
+                                : "border-border",
                           )}
                         >
                           <AccordionTrigger className="px-4 py-3 hover:no-underline">
                             <div className="flex w-full items-center gap-3 pr-2 text-left">
-                              {q.isCorrect ? (
+                              {q.isCorrect === true ? (
                                 <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />
                               ) : (
                                 <XCircle className="size-5 shrink-0 text-rose-600" />
@@ -178,24 +183,41 @@ export default function ReviewPage({
                                 №{idx + 1}
                               </span>
                               <span className="line-clamp-1 flex-1 text-sm font-normal">
-                                {qText || qSubject || "Вопрос"}
+                                {q.display.stem || q.display.topicLine || qSubject || "Вопрос"}
                               </span>
                             </div>
                           </AccordionTrigger>
                           <AccordionContent className="border-t border-border px-4 py-4">
                             <div className="flex flex-col gap-4">
-                              {qText && (
-                                <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                                  {qText}
+                              {q.display.passage && (
+                                <div className="rounded-md border border-border bg-secondary/40 p-4 text-sm leading-relaxed whitespace-pre-wrap">
+                                  {q.display.passage}
                                 </div>
                               )}
-                              <QuestionMedia src={q.imageUrl} alt={qSubject} />
+                              {q.display.topicLine && (
+                                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                  {q.display.topicLine}
+                                </p>
+                              )}
+                              {q.display.stem && (
+                                <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                                  {q.display.stem}
+                                </div>
+                              )}
+                              {q.imageUrls.map((url, imageIndex) => (
+                                <QuestionMedia
+                                  key={`${q.id}-${imageIndex}`}
+                                  src={url}
+                                  alt={qSubject}
+                                />
+                              ))}
                               <div className="flex flex-col gap-2">
-                                {q.options.map((opt, i) => {
-                                  const optText = localize(opt.text, locale)
+                                {q.answerOptions.map((opt, i) => {
+                                  const optText = localize(opt.content ?? opt.text, locale)
+                                  const isSelected = q.selectedIds.includes(opt.id)
                                   const stateClass = opt.isCorrect
                                     ? "border-emerald-300 bg-emerald-50"
-                                    : opt.isSelected
+                                    : isSelected
                                       ? "border-rose-300 bg-rose-50"
                                       : "border-border bg-card"
                                   return (
@@ -221,7 +243,7 @@ export default function ReviewPage({
                                             Верно
                                           </Badge>
                                         )}
-                                        {opt.isSelected && !opt.isCorrect && (
+                                        {isSelected && !opt.isCorrect && (
                                           <Badge variant="destructive">Ваш ответ</Badge>
                                         )}
                                       </div>
@@ -231,7 +253,11 @@ export default function ReviewPage({
                               </div>
 
                               {q.hasExplanation && (
-                                <ExplanationBlock sessionId={sessionId} questionId={q.id} />
+                                <ExplanationBlock
+                                  sessionId={sessionId}
+                                  questionId={q.id}
+                                  locale={locale}
+                                />
                               )}
                             </div>
                           </AccordionContent>
@@ -252,9 +278,11 @@ export default function ReviewPage({
 function ExplanationBlock({
   sessionId,
   questionId,
+  locale,
 }: {
   sessionId: string
   questionId: string
+  locale: Locale
 }) {
   const [open, setOpen] = useState(false)
   const [data, setData] = useState<ExplanationData | null>(null)
@@ -329,9 +357,7 @@ function ExplanationBlock({
           ) : data ? (
             <div className="flex flex-col gap-3">
               <div className="prose prose-sm max-w-none whitespace-pre-wrap leading-relaxed">
-                {typeof data.explanation === "string"
-                  ? data.explanation
-                  : JSON.stringify(data.explanation, null, 2)}
+                {formatExplanation(data.explanation, locale)}
               </div>
               {data.imageUrls && data.imageUrls.length > 0 && (
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -346,4 +372,11 @@ function ExplanationBlock({
       )}
     </div>
   )
+}
+
+function formatExplanation(explanation: unknown, locale: Locale): string {
+  if (typeof explanation === "string") return explanation
+  const localized = localize(explanation as LocalizedText, locale)
+  if (localized) return localized
+  return JSON.stringify(explanation, null, 2) || ""
 }

@@ -44,8 +44,10 @@ export default function ProfilePage() {
   }, [user])
 
   const locale = ((user?.preferredLanguage as Locale) || "ru") as Locale
-  const fullNameStr = localize(user?.fullName, locale)
-  const displayName = fullNameStr || user?.username || user?.phone || "U"
+  const firstLastName = [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim()
+  const fullNameStr = firstLastName || localize(user?.fullName, locale)
+  const displayName =
+    fullNameStr || user?.telegramUsername || user?.username || user?.phone || "U"
   const initials = displayName.toString().slice(0, 2).toUpperCase()
 
   const onSave = async () => {
@@ -83,9 +85,11 @@ export default function ProfilePage() {
             </Avatar>
             <div className="flex flex-col gap-0.5">
               <p className="font-medium text-lg">
-                {fullNameStr || user?.username || "Пользователь"}
+                {displayName === "U" ? "Пользователь" : displayName}
               </p>
-              <p className="text-sm text-muted-foreground">{user?.phone || "—"}</p>
+              <p className="text-sm text-muted-foreground">
+                {user?.phone || user?.telegramUsername || "—"}
+              </p>
             </div>
           </div>
 

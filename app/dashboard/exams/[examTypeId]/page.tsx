@@ -46,10 +46,7 @@ export default function ExamDetailPage({
   const examType = (types || []).find((t) => t.id === examTypeId)
   const examName = localize(examType?.name, locale, "Экзамен")
   const examDescription = localize(examType?.description, locale)
-  const isENT =
-    examType?.code?.toLowerCase() === "ent" ||
-    examName.toLowerCase().includes("ент") ||
-    examName.toLowerCase().includes("ent")
+  const isENT = examType?.slug === "ent"
 
   const { data: subjects, isLoading: subjLoading } = useSWR<Subject[]>(
     `/exams/types/${examTypeId}/subjects`,
@@ -58,7 +55,7 @@ export default function ExamDetailPage({
     `/exams/types/${examTypeId}/templates`,
   )
 
-  const profileSubjects = (subjects || []).filter((s) => s.isProfile !== false && !s.isMandatory)
+  const profileSubjects = (subjects || []).filter((s) => !s.isMandatory)
 
   const toggleProfile = (id: string) => {
     setProfileSubjectIds((cur) =>
@@ -68,18 +65,23 @@ export default function ExamDetailPage({
 
   const startTest = async () => {
     if (!selectedTemplate) return
-    if (isENT && (entScope === "profile" || entScope === "full") && profileSubjectIds.length !== 2) {
+    if (
+      isENT &&
+      (entScope === "profile" || entScope === "full") &&
+      profileSubjectIds.length !== 2
+    ) {
       toast.error("Выберите 2 профильных предмета")
       return
     }
     setStarting(true)
     try {
+      const shouldSendProfileSubjects = isENT && (entScope === "profile" || entScope === "full")
       const session = await api<TestSession>("/tests/start", {
         method: "POST",
         body: {
           templateId: selectedTemplate.id,
           language,
-          profileSubjectIds: isENT ? profileSubjectIds : undefined,
+          profileSubjectIds: shouldSendProfileSubjects ? profileSubjectIds : undefined,
           entScope: isENT ? entScope : undefined,
         },
       })
@@ -180,7 +182,12 @@ export default function ExamDetailPage({
                           {t.durationMins} мин
                         </span>
                       )}
-                      {t.totalQuestions && <span>{t.totalQuestions} вопросов</span>}
+                      <span>
+                        {t.totalQuestions ??
+                          t.sections?.reduce((sum, section) => sum + section.questionCount, 0) ??
+                          0}{" "}
+                        вопросов
+                      </span>
                     </div>
                     <Button onClick={() => setSelectedTemplate(t)} className="mt-1">
                       <Play className="size-4" />
@@ -273,7 +280,14 @@ export default function ExamDetailPage({
               Отмена
             </Button>
             <Button onClick={startTest} disabled={starting}>
-              {starting ? <Spinner className="size-4" /> : <><Play className="size-4" /> Начать пробник</>}
+              {starting ? (
+                <Spinner className="size-4" />
+              ) : (
+                <>
+                  <Play className="size-4" />
+                  Начать пробник
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
