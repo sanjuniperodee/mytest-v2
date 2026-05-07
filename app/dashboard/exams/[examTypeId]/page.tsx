@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState } from "react"
+import { use, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { toast } from "sonner"
@@ -14,6 +14,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { cn } from "@/lib/utils"
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,26 @@ import { useAuth } from "@/lib/api/auth-context"
 import { localize, type Locale } from "@/lib/api/i18n"
 import type { ExamType, Subject, TestSession, TestTemplate } from "@/lib/api/types"
 
+function entModePreview(
+  mode: "mandatory" | "profile" | "full",
+  template: TestTemplate | undefined,
+  profileQuestionCount: number,
+) {
+  if (!template) return { totalQ: 0, displayMins: 0 }
+  const templateQ =
+    template.sections?.reduce((sum, section) => sum + section.questionCount, 0) ??
+    template.totalQuestions ??
+    0
+  const profileQ = 2 * profileQuestionCount
+  const fullQ = templateQ + profileQ
+  const totalQ = mode === "mandatory" ? templateQ : mode === "profile" ? profileQ : fullQ
+  const displayMins =
+    mode !== "full" && fullQ > 0 && totalQ > 0
+      ? Math.max(5, Math.round(template.durationMins * (totalQ / fullQ)))
+      : template.durationMins
+  return { totalQ, displayMins }
+}
+
 export default function ExamDetailPage({
   params,
 }: {
@@ -37,7 +58,9 @@ export default function ExamDetailPage({
   const { user } = useAuth()
   const locale = ((user?.preferredLanguage as Locale) || "ru") as Locale
   const [selectedTemplate, setSelectedTemplate] = useState<TestTemplate | null>(null)
-  const [language, setLanguage] = useState<"ru" | "kk">("ru")
+  const [language, setLanguage] = useState<"ru" | "kk">(
+    user?.preferredLanguage === "kk" ? "kk" : "ru",
+  )
   const [entScope, setEntScope] = useState<"mandatory" | "profile" | "full">("full")
   const [profileSubjectIds, setProfileSubjectIds] = useState<string[]>([])
   const [starting, setStarting] = useState(false)
@@ -56,6 +79,14 @@ export default function ExamDetailPage({
   )
 
   const profileSubjects = (subjects || []).filter((s) => !s.isMandatory)
+  const mandatorySubjects = (subjects || []).filter((s) => s.isMandatory)
+  const entTemplatesSorted = useMemo(
+    () => [...(templates || [])].sort((a, b) => b.durationMins - a.durationMins),
+    [templates],
+  )
+  const activeEntTemplate = isENT ? entTemplatesSorted[0] : undefined
+  const profileQuestionCount = isENT ? 40 : 10
+  const requiresProfiles = isENT && (entScope === "profile" || entScope === "full")
 
   const toggleProfile = (id: string) => {
     setProfileSubjectIds((cur) =>
@@ -64,22 +95,22 @@ export default function ExamDetailPage({
   }
 
   const startTest = async () => {
-    if (!selectedTemplate) return
-    if (
-      isENT &&
-      (entScope === "profile" || entScope === "full") &&
-      profileSubjectIds.length !== 2
-    ) {
+    const templateForStart = isENT ? activeEntTemplate : selectedTemplate
+    if (!templateForStart) {
+      toast.error("Пробник пока недоступен")
+      return
+    }
+    if (requiresProfiles && profileSubjectIds.length !== 2) {
       toast.error("Выберите 2 профильных предмета")
       return
     }
     setStarting(true)
     try {
-      const shouldSendProfileSubjects = isENT && (entScope === "profile" || entScope === "full")
+      const shouldSendProfileSubjects = isENT && requiresProfiles
       const session = await api<TestSession>("/tests/start", {
         method: "POST",
         body: {
-          templateId: selectedTemplate.id,
+          templateId: templateForStart.id,
           language,
           profileSubjectIds: shouldSendProfileSubjects ? profileSubjectIds : undefined,
           entScope: isENT ? entScope : undefined,
@@ -87,7 +118,20 @@ export default function ExamDetailPage({
       })
       router.push(`/exam/${session.id}`)
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Не удалось запустить тест")
+      const message = err instanceof ApiError ? err.message : ""
+      if (
+        message === "TRIAL_LIMIT_EXCEEDED" ||
+        message === "TOTAL_LIMIT_EXHAUSTED" ||
+        message === "NO_ENTITLEMENT"
+      ) {
+        router.push("/dashboard/billing?reason=limit_exhausted")
+        return
+      }
+      if (message === "DAILY_LIMIT_REACHED") {
+        router.push("/dashboard/billing?reason=daily_limit")
+        return
+      }
+      toast.error(message || "Не удалось запустить тест")
       setStarting(false)
     }
   }
@@ -135,73 +179,238 @@ export default function ExamDetailPage({
         )}
       </section>
 
-      <section>
-        <h2 className="mb-3 text-lg font-semibold">Доступные пробники</h2>
-        {tplLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-32 rounded-lg" />
-            ))}
-          </div>
-        ) : (templates || []).length === 0 ? (
+      {isENT && (
+        <section className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
           <Card>
-            <CardContent className="py-10 text-center text-muted-foreground">
-              Пока нет доступных пробников
+            <CardHeader>
+              <CardTitle>Быстрый старт ЕНТ</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-5">
+              <div>
+                <Label>Язык заданий</Label>
+                <RadioGroup
+                  value={language}
+                  onValueChange={(v) => setLanguage(v as "ru" | "kk")}
+                  className="mt-2 grid gap-2 sm:grid-cols-2"
+                >
+                  <Label className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2">
+                    <RadioGroupItem value="ru" /> Русский
+                  </Label>
+                  <Label className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2">
+                    <RadioGroupItem value="kk" /> Қазақша
+                  </Label>
+                </RadioGroup>
+              </div>
+
+              <div>
+                <Label>Объём ЕНТ</Label>
+                <RadioGroup
+                  value={entScope}
+                  onValueChange={(v) => setEntScope(v as typeof entScope)}
+                  className="mt-2 grid gap-2"
+                >
+                  {[
+                    { v: "mandatory", l: "Только обязательные", s: "Математическая грамотность, грамотность чтения, история" },
+                    { v: "profile", l: "Только профильные", s: "Два профильных предмета" },
+                    { v: "full", l: "Полный ЕНТ", s: "Все обязательные и профильные предметы" },
+                  ].map((option) => {
+                    const preview = entModePreview(
+                      option.v as "mandatory" | "profile" | "full",
+                      activeEntTemplate,
+                      profileQuestionCount,
+                    )
+                    return (
+                      <Label
+                        key={option.v}
+                        className={cn(
+                          "flex cursor-pointer items-start gap-3 rounded-md border border-border px-3 py-3",
+                          entScope === option.v && "border-foreground bg-secondary/50",
+                        )}
+                      >
+                        <RadioGroupItem value={option.v} className="mt-1" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium">{option.l}</span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                            {option.s}
+                          </span>
+                        </span>
+                        {activeEntTemplate && (
+                          <span className="shrink-0 text-right text-xs text-muted-foreground">
+                            {preview.totalQ} вопр.
+                            <br />
+                            {preview.displayMins} мин
+                          </span>
+                        )}
+                      </Label>
+                    )
+                  })}
+                </RadioGroup>
+              </div>
+
+              {requiresProfiles && (
+                <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <Label>Профильные предметы</Label>
+                    <Badge variant="secondary">{profileSubjectIds.length}/2</Badge>
+                  </div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {profileSubjects.map((s) => {
+                      const checked = profileSubjectIds.includes(s.id)
+                      const disabled = !checked && profileSubjectIds.length >= 2
+                      return (
+                        <Label
+                          key={s.id}
+                          className={cn(
+                            "flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2",
+                            checked && "border-foreground bg-secondary/50",
+                            disabled && "cursor-not-allowed opacity-50",
+                          )}
+                        >
+                          <Checkbox
+                            checked={checked}
+                            disabled={disabled}
+                            onCheckedChange={() => toggleProfile(s.id)}
+                          />
+                          <span className="text-sm">{localize(s.name, language, "Предмет")}</span>
+                        </Label>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <Button
+                size="lg"
+                className="h-11"
+                onClick={startTest}
+                disabled={starting || !activeEntTemplate || (requiresProfiles && profileSubjectIds.length !== 2)}
+              >
+                {starting ? (
+                  <Spinner className="size-4" />
+                ) : (
+                  <>
+                    <Play className="size-4" />
+                    Начать пробный ЕНТ
+                  </>
+                )}
+              </Button>
             </CardContent>
           </Card>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {(templates || []).map((t) => {
-              const tName = localize(t.name, locale, "Пробник")
-              const tDescription = localize(t.description, locale)
-              return (
-                <Card
-                  key={t.id}
-                  className="relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-foreground/40 hover:shadow-md"
-                >
-                  {t.isPremium && (
-                    <Badge className="absolute right-3 top-3 bg-amber-500 hover:bg-amber-500">
-                      <Crown className="size-3" />
-                      Premium
-                    </Badge>
-                  )}
-                  <CardHeader>
-                    <div className="flex size-11 items-center justify-center rounded-lg bg-foreground text-background shadow-sm">
-                      <BookOpen className="size-5" />
-                    </div>
-                    <CardTitle className="text-lg leading-tight">{tName}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-3">
-                    {tDescription && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">{tDescription}</p>
-                    )}
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      {t.durationMins && (
-                        <span className="inline-flex items-center gap-1">
-                          <Clock className="size-3.5" />
-                          {t.durationMins} мин
-                        </span>
-                      )}
-                      <span>
-                        {t.totalQuestions ??
-                          t.sections?.reduce((sum, section) => sum + section.questionCount, 0) ??
-                          0}{" "}
-                        вопросов
-                      </span>
-                    </div>
-                    <Button onClick={() => setSelectedTemplate(t)} className="mt-1">
-                      <Play className="size-4" />
-                      Начать
-                    </Button>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-        )}
-      </section>
 
-      <Dialog open={!!selectedTemplate} onOpenChange={(o) => !o && setSelectedTemplate(null)}>
+          <Card>
+            <CardHeader>
+              <CardTitle>Что войдёт в тест</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {(entScope === "mandatory" || entScope === "full") && (
+                <div>
+                  <p className="mb-2 text-sm font-medium">Обязательные</p>
+                  <div className="flex flex-wrap gap-2">
+                    {mandatorySubjects.map((s) => (
+                      <Badge key={s.id} variant="default" className="font-normal">
+                        {localize(s.name, language, "Предмет")}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {requiresProfiles && (
+                <div>
+                  <p className="mb-2 text-sm font-medium">Профильные</p>
+                  <div className="flex flex-wrap gap-2">
+                    {profileSubjectIds.length > 0 ? (
+                      profileSubjects
+                        .filter((s) => profileSubjectIds.includes(s.id))
+                        .map((s) => (
+                          <Badge key={s.id} variant="secondary" className="font-normal">
+                            {localize(s.name, language, "Предмет")}
+                          </Badge>
+                        ))
+                    ) : (
+                      <span className="text-sm text-muted-foreground">
+                        Выберите 2 предмета перед стартом
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {!activeEntTemplate && !tplLoading && (
+                <p className="text-sm text-destructive">Пробник пока недоступен</p>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {!isENT && (
+        <section>
+          <h2 className="mb-3 text-lg font-semibold">Доступные пробники</h2>
+          {tplLoading ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-32 rounded-lg" />
+              ))}
+            </div>
+          ) : (templates || []).length === 0 ? (
+            <Card>
+              <CardContent className="py-10 text-center text-muted-foreground">
+                Пока нет доступных пробников
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {(templates || []).map((t) => {
+                const tName = localize(t.name, locale, "Пробник")
+                const tDescription = localize(t.description, locale)
+                return (
+                  <Card
+                    key={t.id}
+                    className="relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-foreground/40 hover:shadow-md"
+                  >
+                    {t.isPremium && (
+                      <Badge className="absolute right-3 top-3 bg-amber-500 hover:bg-amber-500">
+                        <Crown className="size-3" />
+                        Premium
+                      </Badge>
+                    )}
+                    <CardHeader>
+                      <div className="flex size-11 items-center justify-center rounded-lg bg-foreground text-background shadow-sm">
+                        <BookOpen className="size-5" />
+                      </div>
+                      <CardTitle className="text-lg leading-tight">{tName}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-3">
+                      {tDescription && (
+                        <p className="text-sm text-muted-foreground line-clamp-2">{tDescription}</p>
+                      )}
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        {t.durationMins && (
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="size-3.5" />
+                            {t.durationMins} мин
+                          </span>
+                        )}
+                        <span>
+                          {t.totalQuestions ??
+                            t.sections?.reduce((sum, section) => sum + section.questionCount, 0) ??
+                            0}{" "}
+                          вопросов
+                        </span>
+                      </div>
+                      <Button onClick={() => setSelectedTemplate(t)} className="mt-1">
+                        <Play className="size-4" />
+                        Начать
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      <Dialog open={!isENT && !!selectedTemplate} onOpenChange={(o) => !o && setSelectedTemplate(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{localize(selectedTemplate?.name, locale, "Пробник")}</DialogTitle>

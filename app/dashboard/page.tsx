@@ -24,7 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { useAuth } from "@/lib/api/auth-context"
 import { localize, type Locale } from "@/lib/api/i18n"
-import type { AccessByExamItem, SessionListItem, UserExamStats, UserStats } from "@/lib/api/types"
+import type { AccessByExamItem, ExamType, SessionListItem, UserExamStats, UserStats } from "@/lib/api/types"
 
 export default function DashboardHomePage() {
   const { user } = useAuth()
@@ -38,6 +38,7 @@ export default function DashboardHomePage() {
   const { data: sessions, isLoading: sessLoading } = useSWR<{ items: SessionListItem[] }>(
     "/tests/sessions?page=1&limit=5",
   )
+  const { data: examTypes } = useSWR<ExamType[]>("/exams/types")
 
   const items = (sessions as { items?: SessionListItem[] } | SessionListItem[] | undefined)
   const sessionList: SessionListItem[] = Array.isArray(items)
@@ -47,6 +48,8 @@ export default function DashboardHomePage() {
       : []
 
   const inProgress = sessionList.find((s) => s.status === "in_progress")
+  const entExam = (examTypes || []).find((exam) => exam.slug === "ent")
+  const quickStartHref = entExam ? `/dashboard/exams/${entExam.id}` : "/dashboard/exams"
   const bestExam =
     stats?.byExamType?.reduce<UserExamStats | null>((best, item) => {
       if (item.bestScore == null) return best
@@ -84,9 +87,9 @@ export default function DashboardHomePage() {
             </Button>
           ) : (
             <Button asChild size="lg" className="h-11 shrink-0">
-              <Link href="/dashboard/exams">
+              <Link href={quickStartHref}>
                 <BookOpen className="size-4" />
-                Начать пробник
+                Начать ЕНТ
               </Link>
             </Button>
           )}
@@ -136,7 +139,7 @@ export default function DashboardHomePage() {
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <CardTitle>Последние пробники</CardTitle>
             <Link
-              href="/dashboard/exams"
+              href={quickStartHref}
               className="text-sm font-medium text-foreground hover:underline inline-flex items-center gap-1"
             >
               Новый пробник <ArrowRight className="size-3.5" />
@@ -148,7 +151,7 @@ export default function DashboardHomePage() {
                 <Spinner className="size-5" />
               </div>
             ) : sessionList.length === 0 ? (
-              <EmptySessions />
+              <EmptySessions href={quickStartHref} />
             ) : (
               <ul className="flex flex-col divide-y divide-border">
                 {sessionList.map((s) => (
@@ -198,9 +201,9 @@ export default function DashboardHomePage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <Button asChild className="h-11">
-              <Link href="/dashboard/exams">
+              <Link href={quickStartHref}>
                 <BookOpen className="size-4" />
-                Выбрать пробный
+                Начать ЕНТ
               </Link>
             </Button>
             <Button asChild variant="outline" className="h-11">
@@ -658,7 +661,7 @@ function StatusBadge({ status }: { status: SessionListItem["status"] }) {
   )
 }
 
-function EmptySessions() {
+function EmptySessions({ href }: { href: string }) {
   return (
     <div className="flex flex-col items-center gap-3 py-8 text-center">
       <div className="flex size-12 items-center justify-center rounded-full bg-secondary">
@@ -671,7 +674,7 @@ function EmptySessions() {
         </p>
       </div>
       <Button asChild>
-        <Link href="/dashboard/exams">Выбрать экзамен</Link>
+        <Link href={href}>Начать ЕНТ</Link>
       </Button>
     </div>
   )
