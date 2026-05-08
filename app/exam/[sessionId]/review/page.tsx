@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/accordion"
 import { Logo } from "@/components/landing/logo"
 import { QuestionMedia } from "@/components/exam/question-media"
+import { RichText, getDetachedImageUrls } from "@/components/exam/rich-text"
 import { api, ApiError } from "@/lib/api/client"
 import { useAuth } from "@/lib/api/auth-context"
 import { localize, type Locale, type LocalizedText } from "@/lib/api/i18n"
@@ -159,6 +160,14 @@ export default function ReviewPage({
                   <Accordion type="multiple" className="flex flex-col gap-2">
                     {sec.questions.map((q, idx) => {
                       const qSubject = localize(q.subjectName, locale)
+                      const detachedImageUrls = getDetachedImageUrls(q.imageUrls, [
+                        q.display.passage ?? "",
+                        q.display.topicLine ?? "",
+                        q.display.stem,
+                        ...q.answerOptions.map((opt) =>
+                          localize(opt.content ?? opt.text, locale),
+                        ),
+                      ])
                       return (
                         <AccordionItem
                           key={q.id}
@@ -190,21 +199,33 @@ export default function ReviewPage({
                           <AccordionContent className="border-t border-border px-4 py-4">
                             <div className="flex flex-col gap-4">
                               {q.display.passage && (
-                                <div className="rounded-md border border-border bg-secondary/40 p-4 text-sm leading-relaxed whitespace-pre-wrap">
-                                  {q.display.passage}
-                                </div>
+                                <RichText
+                                  as="div"
+                                  value={q.display.passage}
+                                  locale={locale}
+                                  imageUrls={q.imageUrls}
+                                  className="rounded-md border border-border bg-secondary/40 p-4 text-sm leading-relaxed"
+                                />
                               )}
                               {q.display.topicLine && (
-                                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                  {q.display.topicLine}
-                                </p>
+                                <RichText
+                                  as="div"
+                                  value={q.display.topicLine}
+                                  locale={locale}
+                                  imageUrls={q.imageUrls}
+                                  className="text-xs font-medium text-muted-foreground"
+                                />
                               )}
                               {q.display.stem && (
-                                <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                                  {q.display.stem}
-                                </div>
+                                <RichText
+                                  as="div"
+                                  value={q.display.stem}
+                                  locale={locale}
+                                  imageUrls={q.imageUrls}
+                                  className="text-sm leading-relaxed"
+                                />
                               )}
-                              {q.imageUrls.map((url, imageIndex) => (
+                              {detachedImageUrls.map((url, imageIndex) => (
                                 <QuestionMedia
                                   key={`${q.id}-${imageIndex}`}
                                   src={url}
@@ -213,7 +234,6 @@ export default function ReviewPage({
                               ))}
                               <div className="flex flex-col gap-2">
                                 {q.answerOptions.map((opt, i) => {
-                                  const optText = localize(opt.content ?? opt.text, locale)
                                   const isSelected = q.selectedIds.includes(opt.id)
                                   const stateClass = opt.isCorrect
                                     ? "border-emerald-300 bg-emerald-50"
@@ -232,9 +252,12 @@ export default function ReviewPage({
                                         {String.fromCharCode(65 + i)}
                                       </span>
                                       <div className="flex-1 min-w-0 flex flex-col gap-2">
-                                        {optText && (
-                                          <span className="text-sm leading-relaxed">{optText}</span>
-                                        )}
+                                        <RichText
+                                          value={opt.content ?? opt.text}
+                                          locale={locale}
+                                          imageUrls={q.imageUrls}
+                                          className="text-sm leading-relaxed"
+                                        />
                                         {opt.imageUrl && <QuestionMedia src={opt.imageUrl} />}
                                       </div>
                                       <div className="flex flex-col items-end gap-1">
@@ -355,18 +378,30 @@ function ExplanationBlock({
           ) : err ? (
             <p className="text-sm text-rose-700">{err}</p>
           ) : data ? (
-            <div className="flex flex-col gap-3">
-              <div className="prose prose-sm max-w-none whitespace-pre-wrap leading-relaxed">
-                {formatExplanation(data.explanation, locale)}
-              </div>
-              {data.imageUrls && data.imageUrls.length > 0 && (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {data.imageUrls.map((u, i) => (
-                    <QuestionMedia key={i} src={u} />
-                  ))}
+            (() => {
+              const explanationText = formatExplanation(data.explanation, locale)
+              const detachedImageUrls = getDetachedImageUrls(data.imageUrls, [
+                explanationText,
+              ])
+              return (
+                <div className="flex flex-col gap-3">
+                  <RichText
+                    as="div"
+                    value={explanationText}
+                    locale={locale}
+                    imageUrls={data.imageUrls}
+                    className="text-sm leading-relaxed"
+                  />
+                  {detachedImageUrls.length > 0 && (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {detachedImageUrls.map((u, i) => (
+                        <QuestionMedia key={i} src={u} />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              )
+            })()
           ) : null}
         </div>
       )}

@@ -1,8 +1,10 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
+import Script from "next/script"
 import { Manrope, Instrument_Serif } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "@/components/ui/sonner"
 import { Providers } from "@/components/providers"
+import "katex/dist/katex.min.css"
 import "./globals.css"
 
 const manrope = Manrope({
@@ -111,6 +113,8 @@ const faqSchema = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
+  applicationName: "MyTest",
+  manifest: "/manifest.json",
   title: {
     default: "mytest — пробные ЕНТ онлайн с разбором ошибок",
     template: "%s | mytest",
@@ -131,6 +135,10 @@ export const metadata: Metadata = {
   authors: [{ name: "mytest" }],
   creator: "mytest",
   publisher: "mytest",
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+  },
   openGraph: {
     type: "website",
     locale: "ru_RU",
@@ -141,7 +149,7 @@ export const metadata: Metadata = {
       "Сдавай пробные ЕНТ в реальном формате. Первый пробный бесплатно, мгновенный балл, объяснения к каждому вопросу и аналитика.",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-cover.svg",
         width: 1200,
         height: 630,
         alt: "mytest — подготовка к ЕНТ",
@@ -155,7 +163,7 @@ export const metadata: Metadata = {
       "Сдавай пробные ЕНТ в реальном формате. Первый пробный бесплатно, мгновенный балл, объяснения к каждому вопросу.",
     site: "@mytestkz",
     creator: "@mytestkz",
-    images: ["/og-image.png"],
+    images: ["/og-cover.svg"],
   },
   robots: {
     index: true,
@@ -177,6 +185,11 @@ export const metadata: Metadata = {
   },
 }
 
+export const viewport: Viewport = {
+  colorScheme: "light dark",
+  themeColor: "#05070d",
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -185,6 +198,7 @@ export default function RootLayout({
   return (
     <html lang="ru" className={`${manrope.variable} ${instrumentSerif.variable} bg-background`}>
       <head>
+        <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}

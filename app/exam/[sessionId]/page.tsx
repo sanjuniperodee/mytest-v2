@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog"
 import { ExamTimer } from "@/components/exam/timer"
 import { QuestionMedia } from "@/components/exam/question-media"
+import { RichText, getDetachedImageUrls } from "@/components/exam/rich-text"
 import { Logo } from "@/components/landing/logo"
 import { api, ApiError } from "@/lib/api/client"
 import { useAuth } from "@/lib/api/auth-context"
@@ -200,6 +201,12 @@ export default function ExamSessionPage({
   const answered = Object.keys(answers).filter((id) => (answers[id] || []).length > 0).length
   const progress = Math.round((answered / total) * 100)
   const selected = answers[current.id] || []
+  const currentDetachedImageUrls = getDetachedImageUrls(current.imageUrls, [
+    current.display.passage ?? "",
+    current.display.topicLine ?? "",
+    current.display.stem,
+    ...current.answerOptions.map((opt) => localize(opt.content ?? opt.text, locale)),
+  ])
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -265,21 +272,33 @@ export default function ExamSessionPage({
                 return (
                   <>
                     {current.display.passage && (
-                      <div className="rounded-md border border-border bg-secondary/40 p-4 text-sm leading-relaxed whitespace-pre-wrap">
-                        {current.display.passage}
-                      </div>
+                      <RichText
+                        as="div"
+                        value={current.display.passage}
+                        locale={locale}
+                        imageUrls={current.imageUrls}
+                        className="rounded-md border border-border bg-secondary/40 p-4 text-sm leading-relaxed"
+                      />
                     )}
                     {current.display.topicLine && (
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        {current.display.topicLine}
-                      </p>
+                      <RichText
+                        as="div"
+                        value={current.display.topicLine}
+                        locale={locale}
+                        imageUrls={current.imageUrls}
+                        className="text-xs font-medium text-muted-foreground"
+                      />
                     )}
                     {current.display.stem && (
-                      <div className="prose prose-sm sm:prose-base max-w-none whitespace-pre-wrap leading-relaxed">
-                        {current.display.stem}
-                      </div>
+                      <RichText
+                        as="div"
+                        value={current.display.stem}
+                        locale={locale}
+                        imageUrls={current.imageUrls}
+                        className="text-sm leading-relaxed sm:text-base"
+                      />
                     )}
-                    {current.imageUrls.map((url, index) => (
+                    {currentDetachedImageUrls.map((url, index) => (
                       <QuestionMedia key={`${current.id}-${index}`} src={url} alt={qSubject} />
                     ))}
                   </>
@@ -289,7 +308,6 @@ export default function ExamSessionPage({
               <div className="flex flex-col gap-2">
                 {current.answerOptions.map((opt, i) => {
                   const checked = selected.includes(opt.id)
-                  const optText = localize(opt.content ?? opt.text, locale)
                   return (
                     <button
                       key={opt.id}
@@ -313,9 +331,13 @@ export default function ExamSessionPage({
                         {String.fromCharCode(65 + i)}
                       </span>
                       <div className="flex flex-col gap-2 min-w-0 flex-1">
-                        {optText && (
-                          <span className="text-sm leading-relaxed">{optText}</span>
-                        )}
+                        <RichText
+                          value={opt.content ?? opt.text}
+                          locale={locale}
+                          imageUrls={current.imageUrls}
+                          className="text-sm leading-relaxed"
+                        />
+                        {opt.imageUrl && <QuestionMedia src={opt.imageUrl} />}
                       </div>
                     </button>
                   )
