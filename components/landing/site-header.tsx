@@ -5,6 +5,7 @@ import { useState } from "react"
 import { Menu, X, LayoutDashboard } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/api/auth-context"
+import { LanguageSwitcher } from "@/components/language-switcher"
 
 const nav = [
   { label: "Возможности", href: "#features" },
@@ -49,6 +50,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
+          <LanguageSwitcher />
           {isLoading ? (
             <span className="h-9 w-32 rounded-full bg-muted animate-pulse" aria-hidden />
           ) : isAuthenticated ? (
@@ -118,6 +120,7 @@ export function SiteHeader() {
             ),
           )}
           <div className="mt-2 flex flex-col gap-2 border-t border-border/60 pt-3">
+            <LanguageSwitcher className="w-full justify-center" />
             {isAuthenticated ? (
               <Link
                 href="/dashboard"

@@ -3,6 +3,7 @@
 import { SWRConfig } from "swr"
 import { AuthProvider } from "@/lib/api/auth-context"
 import { fetcher } from "@/lib/api/swr"
+import { UiI18nProvider } from "@/lib/i18n/ui"
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -13,7 +14,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         shouldRetryOnError: false,
       }}
     >
-      <AuthProvider scope="user">{children}</AuthProvider>
+      <AuthProvider scope="user">
+        <UiI18nProvider>{children}</UiI18nProvider>
+      </AuthProvider>
     </SWRConfig>
   )
 }

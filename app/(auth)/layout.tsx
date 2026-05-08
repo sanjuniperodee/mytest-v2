@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { Logo } from "@/components/landing/logo"
+import { LanguageSwitcher } from "@/components/language-switcher"
 
 export const metadata: Metadata = {
   title: "Вход в аккаунт",
@@ -20,12 +21,15 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <Logo />
             <span className="text-base font-semibold tracking-tight lowercase">mytest</span>
           </Link>
-          <Link
-            href="/"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            На главную
-          </Link>
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher />
+            <Link
+              href="/"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              На главную
+            </Link>
+          </div>
         </div>
       </header>
       <main className="flex-1 flex items-center justify-center px-4 py-10">{children}</main>

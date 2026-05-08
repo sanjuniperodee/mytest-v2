@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { resolveMediaUrl } from "@/lib/api/client"
 import { localize, type Locale } from "@/lib/api/i18n"
+import { LanguageSwitcher } from "@/components/language-switcher"
 
 const nav = [
   { href: "/dashboard", label: "Обзор", icon: Home },
@@ -68,13 +69,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <Logo />
           <span className="text-base font-semibold lowercase">mytest</span>
         </Link>
-        <button
-          onClick={() => setMobileOpen((v) => !v)}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border"
-          aria-label={mobileOpen ? "Закрыть меню" : "Открыть меню"}
-        >
-          {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <LanguageSwitcher className="h-9" />
+          <button
+            onClick={() => setMobileOpen((v) => !v)}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border"
+            aria-label={mobileOpen ? "Закрыть меню" : "Открыть меню"}
+          >
+            {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+          </button>
+        </div>
       </div>
 
       <div className="flex">
@@ -121,6 +125,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="border-t border-border p-3">
+            <div className="mb-3 hidden lg:block">
+              <LanguageSwitcher className="w-full justify-center" />
+            </div>
             <Link
               href="/dashboard/profile"
               className="flex items-center gap-3 rounded-md p-2 hover:bg-secondary"

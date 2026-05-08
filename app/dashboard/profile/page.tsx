@@ -20,6 +20,7 @@ import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/lib/api/auth-context"
 import { api, ApiError, resolveMediaUrl } from "@/lib/api/client"
 import { localize, type Locale } from "@/lib/api/i18n"
+import { useUiI18n } from "@/lib/i18n/ui"
 import type { User } from "@/lib/api/types"
 
 const TIMEZONES = [
@@ -36,18 +37,19 @@ const MAX_AVATAR_BYTES = 3 * 1024 * 1024
 
 export default function ProfilePage() {
   const { user, refresh } = useAuth()
+  const { locale: uiLocale, setLocale } = useUiI18n()
   const avatarInputRef = useRef<HTMLInputElement>(null)
-  const [language, setLanguage] = useState<"ru" | "kk">("ru")
+  const [language, setLanguage] = useState<"ru" | "kk">(uiLocale)
   const [timezone, setTimezone] = useState("Asia/Almaty")
   const [saving, setSaving] = useState(false)
   const [avatarSaving, setAvatarSaving] = useState(false)
 
   useEffect(() => {
     if (user) {
-      setLanguage((user.preferredLanguage as "ru" | "kk") || "ru")
+      setLanguage(((user.preferredLanguage as "ru" | "kk") || uiLocale) === "kk" ? "kk" : "ru")
       setTimezone(user.timezone || "Asia/Almaty")
     }
-  }, [user])
+  }, [uiLocale, user])
 
   const locale = ((user?.preferredLanguage as Locale) || "ru") as Locale
   const firstLastName = [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim()
@@ -110,6 +112,7 @@ export default function ProfilePage() {
         body: { preferredLanguage: language, timezone },
       })
       await refresh()
+      await setLocale(language, { syncProfile: false })
       toast.success("Настройки сохранены")
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Ошибка сохранения")
