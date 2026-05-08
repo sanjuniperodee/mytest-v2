@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { cn } from "@/lib/utils"
@@ -27,6 +26,10 @@ import { api, ApiError } from "@/lib/api/client"
 import { useAuth } from "@/lib/api/auth-context"
 import { localize, type Locale } from "@/lib/api/i18n"
 import type { ExamType, Subject, TestSession, TestTemplate } from "@/lib/api/types"
+import {
+  buildEntProfilePairOptions,
+  getSelectedEntProfilePairKey,
+} from "@/lib/ent-profile-pairs"
 
 function entModePreview(
   mode: "mandatory" | "profile" | "full",
@@ -78,8 +81,22 @@ export default function ExamDetailPage({
     `/exams/types/${examTypeId}/templates`,
   )
 
-  const profileSubjects = (subjects || []).filter((s) => !s.isMandatory)
-  const mandatorySubjects = (subjects || []).filter((s) => s.isMandatory)
+  const profileSubjects = useMemo(
+    () => (subjects || []).filter((subject) => !subject.isMandatory),
+    [subjects],
+  )
+  const mandatorySubjects = useMemo(
+    () => (subjects || []).filter((subject) => subject.isMandatory),
+    [subjects],
+  )
+  const entProfilePairs = useMemo(
+    () => buildEntProfilePairOptions(profileSubjects),
+    [profileSubjects],
+  )
+  const selectedProfilePairKey = useMemo(
+    () => getSelectedEntProfilePairKey(profileSubjectIds, profileSubjects),
+    [profileSubjectIds, profileSubjects],
+  )
   const entTemplatesSorted = useMemo(
     () => [...(templates || [])].sort((a, b) => b.durationMins - a.durationMins),
     [templates],
@@ -88,10 +105,9 @@ export default function ExamDetailPage({
   const profileQuestionCount = isENT ? 40 : 10
   const requiresProfiles = isENT && (entScope === "profile" || entScope === "full")
 
-  const toggleProfile = (id: string) => {
-    setProfileSubjectIds((cur) =>
-      cur.includes(id) ? cur.filter((x) => x !== id) : cur.length < 2 ? [...cur, id] : cur,
-    )
+  const selectProfilePair = (key: string) => {
+    const pair = entProfilePairs.find((option) => option.key === key)
+    setProfileSubjectIds(pair ? pair.subjects.map((subject) => subject.id) : [])
   }
 
   const startTest = async () => {
@@ -100,8 +116,8 @@ export default function ExamDetailPage({
       toast.error("Пробник пока недоступен")
       return
     }
-    if (requiresProfiles && profileSubjectIds.length !== 2) {
-      toast.error("Выберите 2 профильных предмета")
+    if (requiresProfiles && !selectedProfilePairKey) {
+      toast.error("Выберите одну из доступных пар профильных предметов")
       return
     }
     setStarting(true)
@@ -250,32 +266,39 @@ export default function ExamDetailPage({
               {requiresProfiles && (
                 <div>
                   <div className="flex items-center justify-between gap-3">
-                    <Label>Профильные предметы</Label>
-                    <Badge variant="secondary">{profileSubjectIds.length}/2</Badge>
+                    <Label>Пара профильных предметов</Label>
+                    <Badge variant="secondary">
+                      {selectedProfilePairKey ? "Выбрана" : "Не выбрана"}
+                    </Badge>
                   </div>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    {profileSubjects.map((s) => {
-                      const checked = profileSubjectIds.includes(s.id)
-                      const disabled = !checked && profileSubjectIds.length >= 2
-                      return (
+                  {entProfilePairs.length > 0 ? (
+                    <RadioGroup
+                      value={selectedProfilePairKey ?? ""}
+                      onValueChange={selectProfilePair}
+                      className="mt-2 grid gap-2 sm:grid-cols-2"
+                    >
+                      {entProfilePairs.map((pair) => (
                         <Label
-                          key={s.id}
+                          key={pair.key}
                           className={cn(
-                            "flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2",
-                            checked && "border-foreground bg-secondary/50",
-                            disabled && "cursor-not-allowed opacity-50",
+                            "flex cursor-pointer items-start gap-3 rounded-md border border-border px-3 py-3",
+                            selectedProfilePairKey === pair.key && "border-foreground bg-secondary/50",
                           )}
                         >
-                          <Checkbox
-                            checked={checked}
-                            disabled={disabled}
-                            onCheckedChange={() => toggleProfile(s.id)}
-                          />
-                          <span className="text-sm">{localize(s.name, language, "Предмет")}</span>
+                          <RadioGroupItem value={pair.key} className="mt-1" />
+                          <span className="min-w-0 text-sm font-medium">
+                            {pair.subjects
+                              .map((subject) => localize(subject.name, language, "Предмет"))
+                              .join(" + ")}
+                          </span>
                         </Label>
-                      )
-                    })}
-                  </div>
+                      ))}
+                    </RadioGroup>
+                  ) : (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Доступные пары профильных предметов пока не настроены
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -283,7 +306,7 @@ export default function ExamDetailPage({
                 size="lg"
                 className="h-11"
                 onClick={startTest}
-                disabled={starting || !activeEntTemplate || (requiresProfiles && profileSubjectIds.length !== 2)}
+                disabled={starting || !activeEntTemplate || (requiresProfiles && !selectedProfilePairKey)}
               >
                 {starting ? (
                   <Spinner className="size-4" />
@@ -328,7 +351,7 @@ export default function ExamDetailPage({
                         ))
                     ) : (
                       <span className="text-sm text-muted-foreground">
-                        Выберите 2 предмета перед стартом
+                        Выберите пару перед стартом
                       </span>
                     )}
                   </div>
@@ -411,7 +434,7 @@ export default function ExamDetailPage({
       )}
 
       <Dialog open={!isENT && !!selectedTemplate} onOpenChange={(o) => !o && setSelectedTemplate(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <DialogHeader>
             <DialogTitle>{localize(selectedTemplate?.name, locale, "Пробник")}</DialogTitle>
             <DialogDescription>
@@ -436,52 +459,6 @@ export default function ExamDetailPage({
               </RadioGroup>
             </div>
 
-            {isENT && (
-              <>
-                <div>
-                  <Label>Объём ЕНТ</Label>
-                  <RadioGroup
-                    value={entScope}
-                    onValueChange={(v) => setEntScope(v as typeof entScope)}
-                    className="mt-2 flex flex-col gap-2"
-                  >
-                    {[
-                      { v: "mandatory", l: "Только обязательные (мат.грам., чит.грам., история)" },
-                      { v: "profile", l: "Только профильные предметы" },
-                      { v: "full", l: "Полный ЕНТ (все предметы)" },
-                    ].map((o) => (
-                      <Label
-                        key={o.v}
-                        className="flex items-start gap-2 rounded-md border border-border px-3 py-2 cursor-pointer"
-                      >
-                        <RadioGroupItem value={o.v} className="mt-0.5" />
-                        <span className="text-sm">{o.l}</span>
-                      </Label>
-                    ))}
-                  </RadioGroup>
-                </div>
-
-                {(entScope === "profile" || entScope === "full") && (
-                  <div>
-                    <Label>Профильные предметы (выберите 2)</Label>
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                      {profileSubjects.map((s) => (
-                        <Label
-                          key={s.id}
-                          className="flex items-center gap-2 rounded-md border border-border px-3 py-2 cursor-pointer"
-                        >
-                          <Checkbox
-                            checked={profileSubjectIds.includes(s.id)}
-                            onCheckedChange={() => toggleProfile(s.id)}
-                          />
-                          <span className="text-sm">{localize(s.name, locale, "Предмет")}</span>
-                        </Label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
           </div>
 
           <DialogFooter>
