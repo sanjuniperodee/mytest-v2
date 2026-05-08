@@ -13,7 +13,7 @@ import { useAuth } from "@/lib/api/auth-context"
 import { api, ApiError } from "@/lib/api/client"
 import { localize, type Locale } from "@/lib/api/i18n"
 import { cn } from "@/lib/utils"
-import type { BillingPlan, CheckoutResponse } from "@/lib/api/types"
+import type { AccessByExamItem, BillingPlan, CheckoutResponse, CurrentTariff, TrialStatusItem } from "@/lib/api/types"
 
 interface NormalizedPlan {
   id: string
@@ -69,6 +69,9 @@ export default function BillingPage() {
   const rawPlans: BillingPlan[] = Array.isArray(data) ? data : data?.items ?? []
   const plans = rawPlans.map((p) => normalizePlan(p, locale))
   const sorted = [...plans].sort((a, b) => (a.price ?? 0) - (b.price ?? 0))
+  const currentTariff = user?.currentTariff ?? null
+  const entAccess = user?.accessByExam?.find((item) => item.examSlug === "ent")
+  const entTrial = user?.trialStatus?.ent
 
   // Highlight the most "popular" plan when there's a badge, otherwise the middle plan
   const highlightedIdx = (() => {
@@ -91,24 +94,13 @@ export default function BillingPage() {
         </p>
       </div>
 
-      {user?.hasActiveSubscription && (
-        <Card className="border-emerald-200 bg-emerald-50">
-          <CardContent className="flex flex-col items-start gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-md bg-emerald-600 text-white">
-                <Crown className="size-5" />
-              </div>
-              <div>
-                <p className="font-semibold text-emerald-900">У вас активен Premium</p>
-                <p className="text-sm text-emerald-800">
-                  Спасибо! Все функции уже доступны.
-                </p>
-              </div>
-            </div>
-            <Sparkles className="size-6 text-emerald-600" />
-          </CardContent>
-        </Card>
-      )}
+      <CurrentTariffCard
+        tariff={currentTariff}
+        entAccess={entAccess}
+        trial={entTrial}
+        locale={locale}
+        hasPaid={Boolean(user?.hasActiveSubscription)}
+      />
 
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -134,6 +126,7 @@ export default function BillingPage() {
               key={plan.id}
               plan={plan}
               highlighted={idx === highlightedIdx}
+              current={currentTariff?.isActive === true && currentTariff.code === plan.code}
             />
           ))}
         </div>
@@ -174,9 +167,11 @@ function formatOldPrice(plan: NormalizedPlan): string | null {
 function PlanCard({
   plan,
   highlighted,
+  current,
 }: {
   plan: NormalizedPlan
   highlighted?: boolean
+  current?: boolean
 }) {
   const [loading, setLoading] = useState(false)
 
@@ -239,6 +234,13 @@ function PlanCard({
           </Badge>
         </div>
       )}
+      {current && (
+        <div className="absolute left-4 top-4 z-10">
+          <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+            Текущий
+          </Badge>
+        </div>
+      )}
       <CardContent className="flex flex-1 flex-col gap-5 p-6">
         <div className="flex flex-col gap-1">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -287,12 +289,17 @@ function PlanCard({
 
         <Button
           onClick={onCheckout}
-          disabled={loading}
+          disabled={loading || current}
           variant={highlighted ? "default" : "outline"}
           className="h-11"
         >
           {loading ? (
             <Spinner className="size-4" />
+          ) : current ? (
+            <>
+              <Check className="size-4" />
+              Текущий тариф
+            </>
           ) : (
             <>
               Оформить
@@ -303,4 +310,99 @@ function PlanCard({
       </CardContent>
     </Card>
   )
+}
+
+function CurrentTariffCard({
+  tariff,
+  entAccess,
+  trial,
+  locale,
+  hasPaid,
+}: {
+  tariff: CurrentTariff | null
+  entAccess?: AccessByExamItem
+  trial?: TrialStatusItem
+  locale: Locale
+  hasPaid: boolean
+}) {
+  const title = localize(
+    tariff?.name,
+    locale,
+    hasPaid ? "Premium" : "Бесплатный триал",
+  )
+  const description = localize(tariff?.description, locale)
+  return (
+    <Card className={cn(hasPaid ? "border-emerald-200 bg-emerald-50" : "bg-secondary/30")}>
+      <CardContent className="flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-3">
+          <div
+            className={cn(
+              "flex size-10 shrink-0 items-center justify-center rounded-md text-white",
+              hasPaid ? "bg-emerald-600" : "bg-foreground",
+            )}
+          >
+            {hasPaid ? <Crown className="size-5" /> : <Sparkles className="size-5" />}
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className={cn("font-semibold", hasPaid && "text-emerald-950")}>
+                Текущий тариф: {title}
+              </p>
+              {tariff?.isActive === false && (
+                <Badge variant="outline">Неактивен</Badge>
+              )}
+            </div>
+            {description && (
+              <p className={cn("text-sm text-muted-foreground", hasPaid && "text-emerald-800")}>
+                {description}
+              </p>
+            )}
+            {tariff?.expiresAt && (
+              <p className={cn("mt-1 text-xs text-muted-foreground", hasPaid && "text-emerald-800")}>
+                Действует до {formatDate(tariff.expiresAt)}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[420px]">
+          <TariffMetric label="Сегодня осталось" value={formatDailyRemaining(entAccess)} />
+          <TariffMetric label="Бесплатный триал" value={formatFreeTrialRemaining(trial)} />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function TariffMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-border/70 bg-background/80 px-3 py-2">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-0.5 font-semibold tabular-nums">{value}</p>
+    </div>
+  )
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString("ru-RU", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  })
+}
+
+function formatDailyRemaining(item: AccessByExamItem | undefined): string {
+  if (!item) return "—"
+  if (item.daily.isUnlimited) return "Без лимита"
+  if (item.daily.limit == null) return "—"
+  return `${item.daily.remaining ?? 0}/${item.daily.limit}`
+}
+
+function formatFreeTrialRemaining(trial: TrialStatusItem | undefined): string {
+  if (!trial) return "—"
+  const remaining = trial.freeRemaining ?? trial.remaining ?? 0
+  const limit = trial.freeLimit ?? trial.limit ?? 0
+  return `${remaining}/${limit}`
 }

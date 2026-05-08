@@ -50,6 +50,13 @@ export default function DashboardHomePage() {
   const inProgress = sessionList.find((s) => s.status === "in_progress")
   const entExam = (examTypes || []).find((exam) => exam.slug === "ent")
   const quickStartHref = entExam ? `/dashboard/exams/${entExam.id}` : "/dashboard/exams"
+  const entAccess = user?.accessByExam?.find((item) => item.examSlug === "ent")
+  const entTrial = user?.trialStatus?.ent
+  const tariffName = localize(
+    user?.currentTariff?.name,
+    locale,
+    user?.hasActiveSubscription ? "Premium" : "Бесплатный триал",
+  )
   const bestExam =
     stats?.byExamType?.reduce<UserExamStats | null>((best, item) => {
       if (item.bestScore == null) return best
@@ -77,6 +84,17 @@ export default function DashboardHomePage() {
               Готов к новому пробному ЕНТ? Продолжим там, где остановились — каждая
               отработанная ошибка приближает к высокому баллу.
             </p>
+            <div className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
+              <HeroLimit label="Текущий тариф" value={tariffName} />
+              <HeroLimit
+                label="Сегодня осталось"
+                value={formatDailyRemaining(entAccess)}
+              />
+              <HeroLimit
+                label="Бесплатный триал"
+                value={formatFreeTrialRemaining(entTrial)}
+              />
+            </div>
           </div>
           {inProgress ? (
             <Button asChild size="lg" className="h-11 shrink-0">
@@ -89,7 +107,7 @@ export default function DashboardHomePage() {
             <Button asChild size="lg" className="h-11 shrink-0">
               <Link href={quickStartHref}>
                 <BookOpen className="size-4" />
-                Начать ЕНТ
+                Сдать пробный
               </Link>
             </Button>
           )}
@@ -142,7 +160,7 @@ export default function DashboardHomePage() {
               href={quickStartHref}
               className="text-sm font-medium text-foreground hover:underline inline-flex items-center gap-1"
             >
-              Новый пробник <ArrowRight className="size-3.5" />
+              Сдать пробный <ArrowRight className="size-3.5" />
             </Link>
           </CardHeader>
           <CardContent>
@@ -203,7 +221,7 @@ export default function DashboardHomePage() {
             <Button asChild className="h-11">
               <Link href={quickStartHref}>
                 <BookOpen className="size-4" />
-                Начать ЕНТ
+                Сдать пробный
               </Link>
             </Button>
             <Button asChild variant="outline" className="h-11">
@@ -547,6 +565,17 @@ function StatCard({
   )
 }
 
+function HeroLimit({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-border/70 bg-background/70 px-3 py-2 backdrop-blur">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-0.5 truncate font-semibold tabular-nums">{value}</p>
+    </div>
+  )
+}
+
 function MiniMetric({
   label,
   value,
@@ -646,6 +675,20 @@ function formatAccessLine(item: AccessByExamItem): string {
   return `Сегодня: ${item.daily.remaining ?? 0}/${item.daily.limit}`
 }
 
+function formatDailyRemaining(item: AccessByExamItem | undefined): string {
+  if (!item) return "—"
+  if (item.daily.isUnlimited) return "Без лимита"
+  if (item.daily.limit == null) return "—"
+  return `${item.daily.remaining ?? 0}/${item.daily.limit}`
+}
+
+function formatFreeTrialRemaining(trial: { freeRemaining?: number; freeLimit?: number; remaining?: number; limit?: number } | undefined): string {
+  if (!trial) return "—"
+  const remaining = trial.freeRemaining ?? trial.remaining ?? 0
+  const limit = trial.freeLimit ?? trial.limit ?? 0
+  return `${remaining}/${limit}`
+}
+
 function StatusBadge({ status }: { status: SessionListItem["status"] }) {
   const map: Record<SessionListItem["status"], { label: string; cls: string }> = {
     in_progress: { label: "В процессе", cls: "bg-amber-100 text-amber-900 border-amber-200" },
@@ -674,7 +717,7 @@ function EmptySessions({ href }: { href: string }) {
         </p>
       </div>
       <Button asChild>
-        <Link href={href}>Начать ЕНТ</Link>
+        <Link href={href}>Сдать пробный</Link>
       </Button>
     </div>
   )

@@ -46,6 +46,26 @@ export interface TrialStatus {
   ent: TrialStatusItem
 }
 
+export interface CurrentTariff {
+  code: string
+  name: LocalizedText
+  description?: LocalizedText | null
+  tier: "free" | "trial" | "paid" | "admin" | string
+  sourceType?: string | null
+  subscriptionId?: string | null
+  entitlementId?: string | null
+  planTemplateId?: string | null
+  startsAt?: string | null
+  expiresAt?: string | null
+  isActive?: boolean
+  isPaid?: boolean
+  examSlug?: string | null
+  totalAttemptsLimit?: number | null
+  dailyAttemptsLimit?: number | null
+  usedAttemptsTotal?: number | null
+  remainingAttempts?: number | null
+}
+
 export interface User {
   id: string
   telegramId?: number | null
@@ -62,6 +82,7 @@ export interface User {
   isChannelMember?: boolean
   isAdmin?: boolean | null
   hasActiveSubscription?: boolean
+  currentTariff?: CurrentTariff | null
   accessByExam?: AccessByExamItem[]
   trialStatus?: TrialStatus
   createdAt?: string | null
