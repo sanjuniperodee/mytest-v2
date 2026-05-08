@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { toast } from "sonner"
@@ -32,6 +32,7 @@ export default function MistakesPage() {
   const { data: examTypes } = useSWR<ExamType[]>("/exams/types")
 
   const [examTypeId, setExamTypeId] = useState<string>("all")
+  const [subjectId, setSubjectId] = useState<string>("all")
   const [language, setLanguage] = useState<"ru" | "kk">("ru")
   const [limit, setLimit] = useState(20)
   const [duration, setDuration] = useState(30)
@@ -39,17 +40,51 @@ export default function MistakesPage() {
 
   const total = summary?.openTotal ?? 0
   const byExam = summary?.openByExam ?? []
-  const examsById = new Map<string, ExamType>(
-    (examTypes || []).map((exam) => [exam.id, exam]),
+  const bySubject = summary?.openBySubject ?? []
+  const examsById = useMemo(
+    () => new Map<string, ExamType>((examTypes || []).map((exam) => [exam.id, exam])),
+    [examTypes],
   )
-  const examOptions = byExam.map((row) => {
-    const exam = examsById.get(row.examTypeId)
-    return {
-      id: row.examTypeId,
-      name: localize(exam?.name ?? row.examName, locale, "Экзамен"),
-      count: row.count,
+  const examOptions = useMemo(
+    () =>
+      byExam.map((row) => {
+        const exam = examsById.get(row.examTypeId)
+        return {
+          id: row.examTypeId,
+          name: localize(exam?.name ?? row.examName, locale, "Экзамен"),
+          count: row.count,
+        }
+      }),
+    [byExam, examsById, locale],
+  )
+  const subjectOptions = useMemo(
+    () =>
+      bySubject
+        .filter((row) => examTypeId === "all" || row.examTypeId === examTypeId)
+        .map((row) => {
+          const exam = examsById.get(row.examTypeId)
+          const examName = localize(exam?.name ?? row.examName, locale, "Экзамен")
+          const subjectName = localize(row.subjectName, locale, "Предмет")
+          return {
+            id: row.subjectId,
+            examTypeId: row.examTypeId,
+            label: examTypeId === "all" ? `${subjectName} · ${examName}` : subjectName,
+            count: row.count,
+          }
+        }),
+    [bySubject, examTypeId, examsById, locale],
+  )
+
+  useEffect(() => {
+    if (subjectId === "all") return
+    if (!subjectOptions.some((subject) => subject.id === subjectId)) {
+      setSubjectId("all")
     }
-  })
+  }, [subjectId, subjectOptions])
+
+  useEffect(() => {
+    setLanguage(locale === "kk" ? "kk" : "ru")
+  }, [locale])
 
   const start = async () => {
     setStarting(true)
@@ -59,18 +94,25 @@ export default function MistakesPage() {
         body: {
           language,
           examTypeId: examTypeId === "all" ? undefined : examTypeId,
+          subjectId: subjectId === "all" ? undefined : subjectId,
           limit,
           durationMins: duration,
         },
       })
       router.push(`/exam/${session.id}`)
     } catch (err) {
-      const message =
-        err instanceof ApiError && err.message === "EXAM_TYPE_REQUIRED"
-          ? "Выберите конкретный экзамен"
-          : err instanceof ApiError
-            ? err.message
-            : "Не удалось запустить практику"
+      let message = "Не удалось запустить практику"
+      if (err instanceof ApiError) {
+        if (err.message === "EXAM_TYPE_REQUIRED") {
+          message = "Выберите конкретный экзамен"
+        } else if (err.message === "NO_OPEN_MISTAKES_FOR_SUBJECT") {
+          message = "По этому предмету нет открытых ошибок"
+        } else if (err.message === "NO_OPEN_MISTAKES") {
+          message = "Открытых ошибок пока нет"
+        } else {
+          message = err.message
+        }
+      }
       toast.error(message)
       setStarting(false)
     }
@@ -167,6 +209,32 @@ export default function MistakesPage() {
               {examTypeId === "all" && byExam.length > 0 && (
                 <p className="text-xs text-muted-foreground">
                   Будут включены ошибки из всех экзаменов
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="subject">Предмет</Label>
+              <Select
+                value={subjectId}
+                onValueChange={setSubjectId}
+                disabled={subjectOptions.length === 0}
+              >
+                <SelectTrigger id="subject">
+                  <SelectValue placeholder="Все предметы" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все предметы</SelectItem>
+                  {subjectOptions.map((subject) => (
+                    <SelectItem key={`${subject.examTypeId}:${subject.id}`} value={subject.id}>
+                      {subject.label} ({subject.count})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {subjectId === "all" && subjectOptions.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Будут включены ошибки из всех предметов
                 </p>
               )}
             </div>

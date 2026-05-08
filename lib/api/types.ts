@@ -307,6 +307,15 @@ export interface MistakesSummary {
     examName: LocalizedText | null
     count: number
   }[]
+  openBySubject: {
+    examTypeId: string
+    examSlug: string
+    examName: LocalizedText | null
+    subjectId: string
+    subjectSlug: string
+    subjectName: LocalizedText | null
+    count: number
+  }[]
   recentRecoveries: {
     questionId: string
     examTypeId: string

@@ -107,9 +107,24 @@ export default function ProfilePage() {
   const onSave = async () => {
     setSaving(true)
     try {
+      const currentLanguage =
+        ((user?.preferredLanguage as "ru" | "kk" | null | undefined) || uiLocale) === "kk"
+          ? "kk"
+          : "ru"
+      const currentTimezone = user?.timezone || "Asia/Almaty"
+      const body: { preferredLanguage?: "ru" | "kk"; timezone?: string } = {}
+      if (language !== currentLanguage) body.preferredLanguage = language
+      if (timezone !== currentTimezone) body.timezone = timezone
+
+      if (Object.keys(body).length === 0) {
+        await setLocale(language, { syncProfile: false })
+        toast.success("Настройки сохранены")
+        return
+      }
+
       await api<User>("/users/me", {
         method: "PATCH",
-        body: { preferredLanguage: language, timezone },
+        body,
       })
       await refresh()
       await setLocale(language, { syncProfile: false })
