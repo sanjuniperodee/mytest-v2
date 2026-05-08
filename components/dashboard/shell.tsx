@@ -6,6 +6,7 @@ import { useEffect, useState } from "react"
 import {
   BookOpen,
   CreditCard,
+  GraduationCap,
   Home,
   LogOut,
   Menu,
@@ -27,10 +28,13 @@ const nav = [
   { href: "/dashboard", label: "Обзор", icon: Home },
   { href: "/dashboard/exams", label: "Экзамены", icon: BookOpen },
   { href: "/dashboard/mistakes", label: "Мои ошибки", icon: Target },
+  { href: "/dashboard/admission", label: "Шанс поступления", icon: GraduationCap },
   { href: "/dashboard/leaderboard", label: "Лидерборд", icon: Trophy },
   { href: "/dashboard/billing", label: "Тарифы", icon: CreditCard },
   { href: "/dashboard/profile", label: "Профиль", icon: User },
 ]
+
+const CHANNEL_GATE_PATH = "/dashboard/channel-gate"
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -43,10 +47,30 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, isLoading, router])
 
   useEffect(() => {
+    if (
+      !isLoading &&
+      isAuthenticated &&
+      user?.telegramId &&
+      user.isChannelMember === false &&
+      pathname !== CHANNEL_GATE_PATH
+    ) {
+      router.replace(CHANNEL_GATE_PATH)
+    }
+  }, [isAuthenticated, isLoading, pathname, router, user?.isChannelMember, user?.telegramId])
+
+  useEffect(() => {
     setMobileOpen(false)
   }, [pathname])
 
   if (isLoading || !isAuthenticated) {
+    return (
+      <div className="min-h-svh flex items-center justify-center">
+        <Spinner className="size-6" />
+      </div>
+    )
+  }
+
+  if (user?.telegramId && user.isChannelMember === false && pathname !== CHANNEL_GATE_PATH) {
     return (
       <div className="min-h-svh flex items-center justify-center">
         <Spinner className="size-6" />

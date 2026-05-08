@@ -27,7 +27,11 @@ import {
 } from "@/components/ui/dialog"
 import { ExamTimer } from "@/components/exam/timer"
 import { QuestionMedia } from "@/components/exam/question-media"
-import { RichText, getDetachedImageUrls } from "@/components/exam/rich-text"
+import {
+  RichText,
+  getDetachedImageUrls,
+  imageReferenceText,
+} from "@/components/exam/rich-text"
 import { Logo } from "@/components/landing/logo"
 import { api, ApiError } from "@/lib/api/client"
 import { useAuth } from "@/lib/api/auth-context"
@@ -206,6 +210,7 @@ export default function ExamSessionPage({
     current.display.topicLine ?? "",
     current.display.stem,
     ...current.answerOptions.map((opt) => localize(opt.content ?? opt.text, locale)),
+    imageReferenceText(current.explanation),
   ])
 
   return (
@@ -278,15 +283,6 @@ export default function ExamSessionPage({
                         locale={locale}
                         imageUrls={current.imageUrls}
                         className="rounded-md border border-border bg-secondary/40 p-4 text-sm leading-relaxed"
-                      />
-                    )}
-                    {current.display.topicLine && (
-                      <RichText
-                        as="div"
-                        value={current.display.topicLine}
-                        locale={locale}
-                        imageUrls={current.imageUrls}
-                        className="text-xs font-medium text-muted-foreground"
                       />
                     )}
                     {current.display.stem && (

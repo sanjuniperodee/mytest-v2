@@ -160,6 +160,17 @@ export function getDetachedImageUrls(imageUrls: string[] | undefined, sources: s
   })
 }
 
+export function imageReferenceText(value: unknown): string {
+  if (value == null) return ""
+  if (typeof value === "string") return value
+  if (typeof value === "number") return String(value)
+  if (Array.isArray(value)) return value.map(imageReferenceText).join("\n")
+  if (typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).map(imageReferenceText).join("\n")
+  }
+  return ""
+}
+
 export function RichText({
   value,
   locale,

@@ -1,19 +1,15 @@
 "use client"
 
-import { useState } from "react"
 import useSWR from "swr"
-import { toast } from "sonner"
 import { ArrowRight, Check, Crown, Sparkles, ShieldCheck } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Spinner } from "@/components/ui/spinner"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/api/auth-context"
-import { api, ApiError } from "@/lib/api/client"
 import { localize, type Locale } from "@/lib/api/i18n"
 import { cn } from "@/lib/utils"
-import type { AccessByExamItem, BillingPlan, CheckoutResponse, CurrentTariff, TrialStatusItem } from "@/lib/api/types"
+import type { AccessByExamItem, BillingPlan, CurrentTariff, TrialStatusItem, User } from "@/lib/api/types"
 
 interface NormalizedPlan {
   id: string
@@ -128,26 +124,21 @@ export default function BillingPage() {
               plan={plan}
               highlighted={idx === highlightedIdx}
               current={currentTariff?.isActive === true && currentTariff.code === plan.code}
+              user={user}
+              locale={locale}
             />
           ))}
         </div>
       )}
 
       <Card>
-        <CardContent className="flex flex-col gap-3 p-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:gap-6">
-          <div className="flex items-center gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-foreground">
-              <ShieldCheck className="size-4" />
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <p className="font-medium text-foreground">Гарантия возврата 7 дней</p>
-              <p>Если что-то не понравится — вернём деньги без вопросов.</p>
-            </div>
+        <CardContent className="flex items-center gap-3 p-5 text-sm text-muted-foreground">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-foreground">
+            <ShieldCheck className="size-4" />
           </div>
-          <div className="hidden h-10 w-px bg-border sm:block" />
           <p>
-            Оплата проходит безопасно через FreedomPay. После успешной оплаты Premium
-            активируется автоматически.
+            Для оплаты откройте WhatsApp: мы выставим счёт и подключим Premium после
+            подтверждения платежа.
           </p>
         </CardContent>
       </Card>
@@ -169,31 +160,17 @@ function PlanCard({
   plan,
   highlighted,
   current,
+  user,
+  locale,
 }: {
   plan: NormalizedPlan
   highlighted?: boolean
   current?: boolean
+  user: User | null
+  locale: Locale
 }) {
-  const [loading, setLoading] = useState(false)
-
-  const onCheckout = async () => {
-    setLoading(true)
-    try {
-      const res = await api<CheckoutResponse>("/billing/checkout", {
-        method: "POST",
-        body: { planId: plan.id },
-      })
-      const checkoutUrl = res.checkoutUrl || res.paymentUrl
-      if (checkoutUrl) {
-        window.location.href = checkoutUrl
-      } else {
-        toast.error("Не удалось получить ссылку на оплату")
-        setLoading(false)
-      }
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Ошибка оплаты")
-      setLoading(false)
-    }
+  const onCheckout = () => {
+    window.open(buildWhatsAppPaymentUrl(plan, user, locale), "_blank", "noopener,noreferrer")
   }
 
   const features =
@@ -290,13 +267,11 @@ function PlanCard({
 
         <Button
           onClick={onCheckout}
-          disabled={loading || current}
+          disabled={current}
           variant={highlighted ? "default" : "outline"}
           className="h-11"
         >
-          {loading ? (
-            <Spinner className="size-4" />
-          ) : current ? (
+          {current ? (
             <>
               <Check className="size-4" />
               Текущий тариф
@@ -311,6 +286,45 @@ function PlanCard({
       </CardContent>
     </Card>
   )
+}
+
+function getWhatsAppDigits(): string {
+  const raw = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER
+  const digits = raw ? raw.replace(/\D/g, "") : ""
+  return digits.length >= 10 ? digits : "77775932124"
+}
+
+function buildWhatsAppPaymentUrl(
+  plan: NormalizedPlan,
+  user: User | null,
+  locale: Locale,
+): string {
+  const price = plan.price == null ? "—" : plan.price.toLocaleString("ru-RU")
+  const lines =
+    locale === "kk"
+      ? [`Сәлеметсіз бе! "${plan.name}" тарифін ${price}₸-ға сатып алғым келеді`]
+      : [`Здравствуйте! Хочу приобрести тариф "${plan.name}" за ${price}₸`]
+
+  const phone = typeof user?.phone === "string" ? user.phone.trim() : ""
+  if (phone) {
+    lines.push("", locale === "kk" ? `Нөмірім: ${phone}` : `Мой номер: ${phone}`)
+  }
+
+  const telegram = typeof user?.telegramUsername === "string"
+    ? user.telegramUsername.trim().replace(/^@/, "")
+    : ""
+  if (telegram) {
+    lines.push(`Telegram: @${telegram}`)
+  }
+
+  lines.push(
+    "",
+    locale === "kk"
+      ? `Шот тапсыру нөмірі: ${phone || "хатта жазамын"}`
+      : `Номер для выставления счёта: ${phone || "укажу в переписке"}`,
+  )
+
+  return `https://wa.me/${getWhatsAppDigits()}?text=${encodeURIComponent(lines.join("\n"))}`
 }
 
 function CurrentTariffCard({

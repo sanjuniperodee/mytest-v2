@@ -26,7 +26,11 @@ import {
 } from "@/components/ui/accordion"
 import { Logo } from "@/components/landing/logo"
 import { QuestionMedia } from "@/components/exam/question-media"
-import { RichText, getDetachedImageUrls } from "@/components/exam/rich-text"
+import {
+  RichText,
+  getDetachedImageUrls,
+  imageReferenceText,
+} from "@/components/exam/rich-text"
 import { api, ApiError } from "@/lib/api/client"
 import { useAuth } from "@/lib/api/auth-context"
 import { localize, type Locale, type LocalizedText } from "@/lib/api/i18n"
@@ -167,6 +171,7 @@ export default function ReviewPage({
                         ...q.answerOptions.map((opt) =>
                           localize(opt.content ?? opt.text, locale),
                         ),
+                        imageReferenceText(q.explanation),
                       ])
                       return (
                         <AccordionItem

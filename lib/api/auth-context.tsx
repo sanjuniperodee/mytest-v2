@@ -18,7 +18,7 @@ interface AuthContextValue {
   scope: Scope
   signOut: () => void
   setSession: (data: AuthResponse) => void
-  refresh: () => Promise<void>
+  refresh: () => Promise<User | null>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -105,7 +105,7 @@ export function AuthProvider({
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      await loadCurrentUser()
+      return await loadCurrentUser()
     } finally {
       setLoading(false)
     }

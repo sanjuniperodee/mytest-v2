@@ -23,6 +23,7 @@ export interface FlatSessionQuestion {
   answerOptions: AnswerOption[]
   selectedIds: string[]
   isCorrect: boolean | null
+  explanation: unknown
   hasExplanation: boolean
   multiSelect: boolean
   sectionId: string
@@ -191,6 +192,7 @@ export function flattenSessionQuestions(
       answerOptions: options,
       selectedIds: answer.selectedIds || [],
       isCorrect: answer.isCorrect,
+      explanation: question.explanation,
       hasExplanation: question.explanation != null,
       multiSelect: isMultiSelect(question.type, options),
       sectionId: section?.subjectId ?? subject?.id ?? `section-${sectionIndex}`,
