@@ -29,6 +29,7 @@ import type { ExamType, Subject, TestSession, TestTemplate } from "@/lib/api/typ
 import {
   buildEntProfilePairOptions,
   getSelectedEntProfilePairKey,
+  isEntProfileSubjectAvailable,
 } from "@/lib/ent-profile-pairs"
 
 function entModePreview(
@@ -182,15 +183,22 @@ export default function ExamDetailPage({
           <p className="text-sm text-muted-foreground">Список предметов недоступен</p>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {(subjects || []).map((s) => (
-              <Badge
-                key={s.id}
-                variant={s.isMandatory ? "default" : "secondary"}
-                className="text-sm py-1.5 px-3 font-normal"
-              >
-                {localize(s.name, locale, "Предмет")}
-              </Badge>
-            ))}
+            {(subjects || []).map((s) => {
+              const isClosed = isENT && !isEntProfileSubjectAvailable(s)
+              return (
+                <Badge
+                  key={s.id}
+                  variant={s.isMandatory ? "default" : isClosed ? "outline" : "secondary"}
+                  className={cn(
+                    "text-sm py-1.5 px-3 font-normal",
+                    isClosed && "border-dashed text-muted-foreground opacity-70",
+                  )}
+                >
+                  {localize(s.name, locale, "Предмет")}
+                  {isClosed && <span className="ml-1 text-[10px] uppercase">скоро</span>}
+                </Badge>
+              )
+            })}
           </div>
         )}
       </section>
@@ -272,28 +280,34 @@ export default function ExamDetailPage({
                     </Badge>
                   </div>
                   {entProfilePairs.length > 0 ? (
-                    <RadioGroup
-                      value={selectedProfilePairKey ?? ""}
-                      onValueChange={selectProfilePair}
-                      className="mt-2 grid gap-2 sm:grid-cols-2"
-                    >
-                      {entProfilePairs.map((pair) => (
-                        <Label
-                          key={pair.key}
-                          className={cn(
-                            "flex cursor-pointer items-start gap-3 rounded-md border border-border px-3 py-3",
-                            selectedProfilePairKey === pair.key && "border-foreground bg-secondary/50",
-                          )}
-                        >
-                          <RadioGroupItem value={pair.key} className="mt-1" />
-                          <span className="min-w-0 text-sm font-medium">
-                            {pair.subjects
-                              .map((subject) => localize(subject.name, language, "Предмет"))
-                              .join(" + ")}
-                          </span>
-                        </Label>
-                      ))}
-                    </RadioGroup>
+                    <>
+                      <RadioGroup
+                        value={selectedProfilePairKey ?? ""}
+                        onValueChange={selectProfilePair}
+                        className="mt-2 grid gap-2 sm:grid-cols-2"
+                      >
+                        {entProfilePairs.map((pair) => (
+                          <Label
+                            key={pair.key}
+                            className={cn(
+                              "flex cursor-pointer items-start gap-3 rounded-md border border-border px-3 py-3",
+                              selectedProfilePairKey === pair.key && "border-foreground bg-secondary/50",
+                            )}
+                          >
+                            <RadioGroupItem value={pair.key} className="mt-1" />
+                            <span className="min-w-0 text-sm font-medium">
+                              {pair.subjects
+                                .map((subject) => localize(subject.name, language, "Предмет"))
+                                .join(" + ")}
+                            </span>
+                          </Label>
+                        ))}
+                      </RadioGroup>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Сейчас открыты Математика, Физика, Информатика и География.
+                        Остальные профильные предметы появятся после наполнения базы.
+                      </p>
+                    </>
                   ) : (
                     <p className="mt-2 text-sm text-muted-foreground">
                       Доступные пары профильных предметов пока не настроены

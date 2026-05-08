@@ -17,11 +17,13 @@ import {
   TrendingUp,
   Trophy,
 } from "lucide-react"
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { useAuth } from "@/lib/api/auth-context"
 import { localize, type Locale } from "@/lib/api/i18n"
 import type { AccessByExamItem, ExamType, SessionListItem, UserExamStats, UserStats } from "@/lib/api/types"
@@ -52,10 +54,11 @@ export default function DashboardHomePage() {
   const quickStartHref = entExam ? `/dashboard/exams/${entExam.id}` : "/dashboard/exams"
   const entAccess = user?.accessByExam?.find((item) => item.examSlug === "ent")
   const entTrial = user?.trialStatus?.ent
+  const hasPaidSubscription = Boolean(user?.hasActiveSubscription)
   const tariffName = localize(
     user?.currentTariff?.name,
     locale,
-    user?.hasActiveSubscription ? "Premium" : "Бесплатный триал",
+    hasPaidSubscription ? "Premium" : "Стартовый доступ",
   )
   const bestExam =
     stats?.byExamType?.reduce<UserExamStats | null>((best, item) => {
@@ -63,6 +66,7 @@ export default function DashboardHomePage() {
       if (!best || best.bestScore == null || item.bestScore > best.bestScore) return item
       return best
     }, null) ?? null
+  const entStats = stats?.byExamType?.find((item) => item.examSlug === "ent")
   const averageResult = stats ? `${Math.round(stats.averageScore)}%` : "—"
   const bestResult = bestExam ? formatBestPoints(bestExam) : stats?.bestScore ?? "—"
 
@@ -84,16 +88,22 @@ export default function DashboardHomePage() {
               Готов к новому пробному ЕНТ? Продолжим там, где остановились — каждая
               отработанная ошибка приближает к высокому баллу.
             </p>
-            <div className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
+            <div
+              className={`mt-2 grid gap-2 text-sm ${
+                hasPaidSubscription ? "sm:grid-cols-2" : "sm:grid-cols-3"
+              }`}
+            >
               <HeroLimit label="Текущий тариф" value={tariffName} />
               <HeroLimit
                 label="Сегодня осталось"
                 value={formatDailyRemaining(entAccess)}
               />
-              <HeroLimit
-                label="Бесплатный триал"
-                value={formatFreeTrialRemaining(entTrial)}
-              />
+              {!hasPaidSubscription && (
+                <HeroLimit
+                  label="Пробные попытки"
+                  value={formatFreeTrialRemaining(entTrial)}
+                />
+              )}
             </div>
           </div>
           {inProgress ? (
@@ -144,6 +154,8 @@ export default function DashboardHomePage() {
           accent="orange"
         />
       </div>
+
+      <EntProgressChart item={entStats} loading={statsLoading} />
 
       <StatsDashboards
         stats={stats}
@@ -240,6 +252,94 @@ export default function DashboardHomePage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+function EntProgressChart({
+  item,
+  loading,
+}: {
+  item?: UserExamStats
+  loading: boolean
+}) {
+  const scores = item?.recentScores ?? []
+  const chartData = scores.map((score, index) => ({
+    attempt: index + 1,
+    score: clampPct(score),
+  }))
+  const latest = scores.length > 0 ? clampPct(scores[scores.length - 1]) : null
+  const first = scores.length > 0 ? clampPct(scores[0]) : null
+  const delta = latest != null && first != null ? latest - first : null
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-4">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <TrendingUp className="size-4" />
+          Прогресс ЕНТ
+        </CardTitle>
+        <Badge variant="secondary">последние {scores.length}</Badge>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <Skeleton className="h-64 w-full rounded-lg" />
+        ) : scores.length === 0 ? (
+          <EmptyDashboard
+            icon={TrendingUp}
+            title="График появится после ЕНТ"
+            text="Завершите хотя бы один полный пробный ЕНТ, чтобы увидеть динамику баллов."
+          />
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+            <ChartContainer
+              config={{
+                score: { label: "Результат", color: "var(--foreground)" },
+              }}
+              className="h-64 w-full"
+            >
+              <LineChart data={chartData} margin={{ left: 8, right: 12, top: 12, bottom: 8 }}>
+                <CartesianGrid vertical={false} />
+                <XAxis
+                  dataKey="attempt"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tickFormatter={(value) => `#${value}`}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  width={34}
+                  tickFormatter={(value) => `${value}%`}
+                />
+                <ChartTooltip
+                  cursor={false}
+                  content={<ChartTooltipContent hideLabel indicator="line" />}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  stroke="var(--color-score)"
+                  strokeWidth={3}
+                  dot={{ r: 4 }}
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
+            </ChartContainer>
+            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+              <MiniMetric label="Последний" value={latest != null ? `${latest}%` : "—"} />
+              <MiniMetric label="Лучший балл" value={item ? formatBestPoints(item) : "—"} />
+              <MiniMetric
+                label="Динамика"
+                value={delta == null ? "—" : `${delta >= 0 ? "+" : ""}${delta}%`}
+              />
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

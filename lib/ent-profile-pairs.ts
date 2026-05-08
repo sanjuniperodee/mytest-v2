@@ -1,16 +1,23 @@
 import type { Subject } from "@/lib/api/types"
 
+export const ENT_AVAILABLE_PROFILE_SUBJECT_SLUGS = [
+  "math",
+  "physics",
+  "informatics",
+  "geography",
+] as const
+
 const ENT_PROFILE_SUBJECT_PAIRS = [
   ["math", "physics"],
   ["math", "geography"],
   ["math", "informatics"],
-  ["biology", "chemistry"],
-  ["biology", "geography"],
-  ["world_history", "geography"],
-  ["world_history", "english"],
-  ["geography", "english"],
-  ["chemistry", "physics"],
 ] as const
+
+const entAvailableProfileSubjectSlugs = new Set<string>(ENT_AVAILABLE_PROFILE_SUBJECT_SLUGS)
+
+export function isEntProfileSubjectAvailable(subject: Pick<Subject, "slug" | "isMandatory">) {
+  return subject.isMandatory || entAvailableProfileSubjectSlugs.has(subject.slug)
+}
 
 export interface EntProfilePairOption {
   key: string

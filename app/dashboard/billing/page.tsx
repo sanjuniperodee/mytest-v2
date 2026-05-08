@@ -72,6 +72,7 @@ export default function BillingPage() {
   const currentTariff = user?.currentTariff ?? null
   const entAccess = user?.accessByExam?.find((item) => item.examSlug === "ent")
   const entTrial = user?.trialStatus?.ent
+  const hasPaidSubscription = Boolean(user?.hasActiveSubscription)
 
   // Highlight the most "popular" plan when there's a badge, otherwise the middle plan
   const highlightedIdx = (() => {
@@ -99,7 +100,7 @@ export default function BillingPage() {
         entAccess={entAccess}
         trial={entTrial}
         locale={locale}
-        hasPaid={Boolean(user?.hasActiveSubscription)}
+        hasPaid={hasPaidSubscription}
       />
 
       {isLoading ? (
@@ -328,7 +329,7 @@ function CurrentTariffCard({
   const title = localize(
     tariff?.name,
     locale,
-    hasPaid ? "Premium" : "Бесплатный триал",
+    hasPaid ? "Premium" : "Стартовый доступ",
   )
   const description = localize(tariff?.description, locale)
   return (
@@ -365,9 +366,16 @@ function CurrentTariffCard({
           </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[420px]">
+        <div
+          className={cn(
+            "grid gap-2",
+            hasPaid ? "sm:grid-cols-1 lg:min-w-[210px]" : "sm:grid-cols-2 lg:min-w-[420px]",
+          )}
+        >
           <TariffMetric label="Сегодня осталось" value={formatDailyRemaining(entAccess)} />
-          <TariffMetric label="Бесплатный триал" value={formatFreeTrialRemaining(trial)} />
+          {!hasPaid && (
+            <TariffMetric label="Пробные попытки" value={formatFreeTrialRemaining(trial)} />
+          )}
         </div>
       </CardContent>
     </Card>
