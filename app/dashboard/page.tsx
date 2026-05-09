@@ -248,6 +248,12 @@ export default function DashboardHomePage() {
                 Лидерборд ЕНТ
               </Link>
             </Button>
+            <Button asChild variant="ghost" className="h-11">
+              <Link href="/dashboard/stats">
+                <TrendingUp className="size-4" />
+                Мой прогресс
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
