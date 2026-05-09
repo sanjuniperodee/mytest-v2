@@ -1,7 +1,8 @@
 "use client"
 
-import { useCallback, useReducer } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useCallback, useEffect, useReducer, useState } from "react"
+import { createPortal } from "react-dom"
+import { XIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type Op = "+" | "-" | "*" | "/"
@@ -137,6 +138,29 @@ interface CalculatorProps {
 
 export function Calculator({ open, onClose }: CalculatorProps) {
   const [state, dispatch] = useReducer(calcReducer, initialState)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [open, onClose])
+
+  useEffect(() => {
+    if (!open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [open])
 
   const pad = useCallback(
     (
@@ -150,7 +174,7 @@ export function Calculator({ open, onClose }: CalculatorProps) {
         onClick={() => dispatch(action)}
         aria-label={ariaLabel}
         className={cn(
-          "flex h-14 w-full items-center justify-center rounded-lg text-lg font-medium transition-colors active:bg-accent",
+          "flex h-14 w-full touch-manipulation select-none items-center justify-center rounded-lg text-lg font-medium transition-colors active:bg-accent",
           className,
         )}
       >
@@ -160,17 +184,40 @@ export function Calculator({ open, onClose }: CalculatorProps) {
     [],
   )
 
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-xs p-0 gap-0">
-        <DialogHeader>
-          <DialogTitle>Калькулятор</DialogTitle>
-        </DialogHeader>
-        <div className="flex items-center justify-end rounded-lg border border-border bg-secondary px-3 text-2xl font-medium tabular-nums">
+  if (!mounted || !open) return null
+
+  return createPortal(
+    <>
+      <div
+        className="fixed inset-0 z-[200] bg-black/50"
+        aria-hidden
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exam-calculator-title"
+        className="fixed left-1/2 top-1/2 z-[201] w-[min(100vw-1rem,20rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-0 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="relative border-b border-border px-4 pb-3 pt-4">
+          <h2 id="exam-calculator-title" className="text-lg font-semibold leading-none">
+            Калькулятор
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="ring-offset-background focus:ring-ring absolute top-3 right-3 inline-flex rounded-md p-2 opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+            aria-label="Закрыть"
+          >
+            <XIcon className="size-4" />
+          </button>
+        </div>
+        <div className="flex items-center justify-end border-b border-border bg-secondary px-3 py-2 text-2xl font-medium tabular-nums">
           {state.display}
         </div>
 
-        <div className="grid grid-cols-4 gap-2 px-4 pb-4">
+        <div className="grid grid-cols-4 gap-2 p-4">
           {pad("AC", { type: "clear" }, "bg-secondary hover:bg-secondary/80 text-sm")}
           {pad("⌫", { type: "back" }, "bg-secondary hover:bg-secondary/80")}
           {pad("÷", { type: "op", op: "/" }, "bg-secondary hover:bg-secondary/80")}
@@ -189,16 +236,13 @@ export function Calculator({ open, onClose }: CalculatorProps) {
           {pad("1", { type: "digit", d: "1" })}
           {pad("2", { type: "digit", d: "2" })}
           {pad("3", { type: "digit", d: "3" })}
-          {pad(
-            "=",
-            { type: "eq" },
-            "bg-foreground text-background hover:bg-foreground/90",
-          )}
+          {pad("=", { type: "eq" }, "bg-foreground text-background hover:bg-foreground/90")}
 
           {pad("0", { type: "digit", d: "0" }, "col-span-2")}
           {pad(".", { type: "dot" })}
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </>,
+    document.body,
   )
 }

@@ -22,8 +22,10 @@ export function ExamTimer({
   className?: string
 }) {
   if (remaining == null) return null
-  const isCritical = remaining <= 60
-  const isWarning = remaining <= 300 && !isCritical
+  const secs = Number(remaining)
+  if (!Number.isFinite(secs)) return null
+  const isCritical = secs <= 60
+  const isWarning = secs <= 300 && !isCritical
   return (
     <div
       className={cn(
@@ -37,7 +39,7 @@ export function ExamTimer({
       )}
     >
       <Clock className="size-3.5" />
-      <span>{formatHMS(remaining)}</span>
+      <span>{formatHMS(secs)}</span>
     </div>
   )
 }

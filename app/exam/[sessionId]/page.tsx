@@ -70,15 +70,38 @@ export default function ExamSessionPage({
   const [showCalculator, setShowCalculator] = useState(false)
   const [finishing, setFinishing] = useState(false)
   const initRef = useRef(false)
+  const timeoutFinishRef = useRef(false)
+  /** Wall-clock end for countdown (survives background throttling / Telegram WebView). */
+  const timerEndMsRef = useRef<number | null>(null)
+  const [timerEpoch, setTimerEpoch] = useState(0)
 
   const flat = useMemo<FlatSessionQuestion[]>(() => {
     if (!session) return []
     return flattenSessionQuestions(session, locale)
   }, [session, locale])
 
+  const armCountdown = useCallback((totalSeconds: number) => {
+    const s = Math.max(0, Math.floor(Number(totalSeconds)))
+    if (!Number.isFinite(s)) return
+    timerEndMsRef.current = Date.now() + s * 1000
+    setRemaining(s)
+    setTimerEpoch((n) => n + 1)
+  }, [])
+
+  // New session in URL: reset client state (same route can remount without full remount)
+  useEffect(() => {
+    initRef.current = false
+    timeoutFinishRef.current = false
+    timerEndMsRef.current = null
+    setRemaining(null)
+    setAnswers({})
+    setActiveIdx(0)
+    setTimerEpoch((n) => n + 1)
+  }, [sessionId])
+
   // Initialise local state from server data once
   useEffect(() => {
-    if (!session || initRef.current) return
+    if (!session || session.id !== sessionId || initRef.current) return
     initRef.current = true
     const initial: Record<string, string[]> = {}
     for (const q of flat) {
@@ -87,10 +110,11 @@ export default function ExamSessionPage({
       }
     }
     setAnswers(initial)
-    if (session.timeRemaining != null) {
-      setRemaining(session.timeRemaining)
+    if (session.timeRemaining != null && session.timeRemaining !== undefined) {
+      const tr = Number(session.timeRemaining)
+      if (Number.isFinite(tr)) armCountdown(tr)
     }
-  }, [session, flat])
+  }, [session, sessionId, flat, armCountdown])
 
   // Redirect already-finished session to review
   useEffect(() => {
@@ -99,38 +123,29 @@ export default function ExamSessionPage({
     }
   }, [session, sessionId, router])
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const timerStartedRef = useRef(false)
-
-  // Start interval when remaining first becomes non-null (after session loads)
-  // Don't re-run when remaining ticks change — just clean up when it hits 0
+  // Drive display from wall-clock deadline so timers keep correct time after tab sleeps
+  // or in Telegram Mini App (setInterval is heavily throttled in background).
   useEffect(() => {
-    if (remaining == null) return
+    if (timerEndMsRef.current == null) return
 
-    if (timerStartedRef.current && timerRef.current !== null) {
-      // already running, no need to restart
-      return
+    const tick = () => {
+      const end = timerEndMsRef.current
+      if (end == null) return
+      const next = Math.max(0, Math.ceil((end - Date.now()) / 1000))
+      setRemaining(next)
+      if (next <= 0) timerEndMsRef.current = null
     }
-    timerStartedRef.current = true
-
-    timerRef.current = setInterval(() => {
-      setRemaining((prev) => {
-        if (prev == null || prev <= 1) {
-          clearInterval(timerRef.current!)
-          timerRef.current = null
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
+    tick()
+    const id = setInterval(tick, 250)
+    const onVis = () => {
+      if (document.visibilityState === "visible") tick()
+    }
+    document.addEventListener("visibilitychange", onVis)
     return () => {
-      if (timerRef.current !== null) {
-        clearInterval(timerRef.current)
-        timerRef.current = null
-      }
+      clearInterval(id)
+      document.removeEventListener("visibilitychange", onVis)
     }
-  }, [remaining])
+  }, [sessionId, timerEpoch])
 
   // Auto-finish on timeout
   const finish = useCallback(
@@ -145,16 +160,18 @@ export default function ExamSessionPage({
       } catch (err) {
         toast.error(err instanceof ApiError ? err.message : "Не удалось завершить тест")
         setFinishing(false)
+        if (reason === "timeout") timeoutFinishRef.current = false
       }
     },
     [finishing, router, sessionId],
   )
 
   useEffect(() => {
-    if (remaining != null && remaining <= 0) {
-      finish("timeout")
-    }
-  }, [remaining, finish])
+    if (remaining !== 0 || session?.status !== "in_progress") return
+    if (timeoutFinishRef.current) return
+    timeoutFinishRef.current = true
+    void finish("timeout")
+  }, [remaining, session?.status, finish])
 
   const submitAnswer = useCallback(
     async (questionId: string, selectedIds: string[]) => {
@@ -167,8 +184,8 @@ export default function ExamSessionPage({
             body: { questionId, selectedIds },
           },
         )
-        if (res.serverTimeRemaining != null) {
-          setRemaining(res.serverTimeRemaining)
+        if (res.serverTimeRemaining != null && res.serverTimeRemaining !== undefined) {
+          armCountdown(Number(res.serverTimeRemaining))
         }
       } catch (err) {
         toast.error(err instanceof ApiError ? err.message : "Ошибка сохранения ответа")
@@ -176,7 +193,7 @@ export default function ExamSessionPage({
         setSavingId((cur) => (cur === questionId ? null : cur))
       }
     },
-    [sessionId],
+    [sessionId, armCountdown],
   )
 
   const onSelect = (q: FlatSessionQuestion, optionId: string) => {
@@ -257,7 +274,7 @@ export default function ExamSessionPage({
               size="sm"
               variant="outline"
               onClick={() => setShowCalculator(true)}
-              className="hidden sm:flex"
+              aria-label="Калькулятор"
             >
               <Calculator className="size-4" />
             </Button>
