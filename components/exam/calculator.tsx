@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useReducer, useState } from "react"
+import { useCallback, useEffect, useReducer, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { XIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -139,8 +139,8 @@ interface CalculatorProps {
 export function Calculator({ open, onClose }: CalculatorProps) {
   const [state, dispatch] = useReducer(calcReducer, initialState)
   const [mounted, setMounted] = useState(false)
-  /** After touch handling, ignore the synthetic `click` (Telegram / iOS WebView). */
-  const suppressClickUntilMs = useRef(0)
+  /** Pointer, touch и click часто дают два события за один тап — одно действие. */
+  const lastPadAt = useRef(0)
 
   useEffect(() => {
     setMounted(true)
@@ -164,6 +164,16 @@ export function Calculator({ open, onClose }: CalculatorProps) {
     }
   }, [open])
 
+  const applyPad = useCallback(
+    (action: CalcAction) => {
+      const t = performance.now()
+      if (t - lastPadAt.current < 35) return
+      lastPadAt.current = t
+      dispatch(action)
+    },
+    [dispatch],
+  )
+
   const pad = useCallback(
     (
       label: string,
@@ -171,22 +181,28 @@ export function Calculator({ open, onClose }: CalculatorProps) {
       className = "",
       ariaLabel?: string,
     ) => {
-      const fire = () => dispatch(action)
       return (
         <button
           type="button"
-          onPointerDown={(e) => {
-            e.stopPropagation()
-            if (e.pointerType === "touch" || e.pointerType === "pen") {
-              e.preventDefault()
-              fire()
-              suppressClickUntilMs.current = Date.now() + 800
-            }
-          }}
           onClick={(e) => {
             e.stopPropagation()
-            if (Date.now() < suppressClickUntilMs.current) return
-            fire()
+            applyPad(action)
+          }}
+          onPointerUp={(e) => {
+            e.stopPropagation()
+            if (e.pointerType === "mouse" && e.button !== 0) return
+            applyPad(action)
+          }}
+          onTouchEnd={(e) => {
+            e.stopPropagation()
+            e.preventDefault()
+            applyPad(action)
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" && e.key !== " ") return
+            e.preventDefault()
+            e.stopPropagation()
+            dispatch(action)
           }}
           aria-label={ariaLabel}
           className={cn(
@@ -198,23 +214,27 @@ export function Calculator({ open, onClose }: CalculatorProps) {
         </button>
       )
     },
-    [],
+    [applyPad, dispatch],
   )
 
   if (!mounted || !open) return null
 
   return createPortal(
-    <div data-no-translate className="contents">
-      <div
-        className="fixed inset-0 z-[200] bg-black/50"
-        aria-hidden
+    <div
+      data-no-translate
+      className="fixed inset-0 z-[10000] flex items-center justify-center p-2"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default border-0 bg-black/50 p-0"
+        aria-label="Закрыть калькулятор"
         onClick={onClose}
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="exam-calculator-title"
-        className="fixed left-1/2 top-1/2 z-[210] w-[min(100vw-1rem,20rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-0 shadow-2xl"
+        className="relative z-10 w-[min(100vw-1rem,20rem)] rounded-xl border border-border bg-background p-0 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative border-b border-border px-4 pb-3 pt-4">
@@ -223,7 +243,20 @@ export function Calculator({ open, onClose }: CalculatorProps) {
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation()
+              onClose()
+            }}
+            onPointerUp={(e) => {
+              e.stopPropagation()
+              if (e.pointerType === "mouse" && e.button !== 0) return
+              onClose()
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              onClose()
+            }}
             className="ring-offset-background focus:ring-ring absolute top-3 right-3 inline-flex rounded-md p-2 opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
             aria-label="Закрыть"
           >

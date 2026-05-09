@@ -139,8 +139,7 @@ export default function ExamSessionPage({
     }
   }, [session, sessionId, router])
 
-  // Drive display from wall-clock deadline so timers keep correct time after tab sleeps
-  // or in Telegram Mini App (setInterval is heavily throttled in background).
+  // Отображение относительно wall-clock дедлайна; при возврате на вкладку / из bfcache подтягиваем тик.
   useEffect(() => {
     if (timerEndMsRef.current == null) return
 
@@ -157,13 +156,16 @@ export default function ExamSessionPage({
       if (document.visibilityState === "visible") tick()
     }
     document.addEventListener("visibilitychange", onVis)
+    const onPageShow = () => tick()
+    window.addEventListener("pageshow", onPageShow)
     return () => {
       clearInterval(id)
       document.removeEventListener("visibilitychange", onVis)
+      window.removeEventListener("pageshow", onPageShow)
     }
   }, [sessionId, timerEpoch])
 
-  // Telegram / WebView: таймеры могут «замирать»; при возврате на экран подтягиваем время с сервера
+  // Вкладка / мини-приложение: при возврате фокуса синхронизируем время с сервером
   useEffect(() => {
     const syncFromServer = () => {
       if (document.visibilityState !== "visible") return
