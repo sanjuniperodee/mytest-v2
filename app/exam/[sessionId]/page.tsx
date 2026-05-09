@@ -322,7 +322,9 @@ export default function ExamSessionPage({
               className="lg:hidden"
             >
               <ListChecks className="size-4" />
-              {answered}/{total}
+              <span data-no-translate className="tabular-nums">
+                {answered}/{total}
+              </span>
             </Button>
             <Button size="sm" onClick={() => setShowFinish(true)}>
               <Flag className="size-4" />
@@ -349,8 +351,11 @@ export default function ExamSessionPage({
           )}
           <div className="mb-4 flex items-baseline justify-between gap-3">
             <h1 className="text-xl font-semibold tracking-tight">
-              Вопрос {activeIdx + 1}{" "}
-              <span className="text-muted-foreground font-normal">/ {total}</span>
+              Вопрос{" "}
+              <span data-no-translate className="tabular-nums">
+                {activeIdx + 1}
+                <span className="text-muted-foreground font-normal"> / {total}</span>
+              </span>
             </h1>
             {savingId === current.id && (
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -478,8 +483,10 @@ export default function ExamSessionPage({
         <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Все вопросы</DialogTitle>
-            <DialogDescription>
-              Отвечено {answered} из {total}
+            <DialogDescription className="tabular-nums">
+              Отвечено{" "}
+              <span data-no-translate>{answered}</span> из{" "}
+              <span data-no-translate>{total}</span>
             </DialogDescription>
           </DialogHeader>
           <QuestionGrid
@@ -503,8 +510,9 @@ export default function ExamSessionPage({
           <DialogHeader>
             <DialogTitle>Завершить тест?</DialogTitle>
             <DialogDescription>
-              Вы ответили на {answered} из {total} вопросов. После завершения вернуться к
-              изменениям нельзя.
+              Вы ответили на <span data-no-translate className="tabular-nums">{answered}</span> из{" "}
+              <span data-no-translate className="tabular-nums">{total}</span> вопросов. После
+              завершения вернуться к изменениям нельзя.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -562,7 +570,7 @@ function QuestionGrid({
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Прогресс
         </p>
-        <p className="mt-1 text-2xl font-semibold tabular-nums">
+        <p data-no-translate className="mt-1 text-2xl font-semibold tabular-nums">
           {answered}/{total}
         </p>
       </div>
