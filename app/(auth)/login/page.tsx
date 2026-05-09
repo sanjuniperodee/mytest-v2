@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { PhoneForm } from "@/components/auth/phone-form"
 import { GoogleButton } from "@/components/auth/google-button"
-import { TelegramButton } from "@/components/auth/telegram-button"
 import { useAuth } from "@/lib/api/auth-context"
 import { Spinner } from "@/components/ui/spinner"
 import { getTelegramBotLink, getTelegramBotUsername } from "@/lib/telegram"
@@ -66,10 +65,9 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="phone" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="phone">Телефон</TabsTrigger>
               <TabsTrigger value="google">Google</TabsTrigger>
-              <TabsTrigger value="telegram">Telegram</TabsTrigger>
             </TabsList>
             <TabsContent value="phone" className="mt-6">
               <PhoneForm />
@@ -79,12 +77,6 @@ export default function LoginPage() {
                 Используйте свой Google-аккаунт для быстрого входа
               </p>
               <GoogleButton />
-            </TabsContent>
-            <TabsContent value="telegram" className="mt-6 flex flex-col items-center gap-3">
-              <p className="text-sm text-muted-foreground text-center">
-                Войдите через ваш Telegram-аккаунт
-              </p>
-              <TelegramButton />
             </TabsContent>
           </Tabs>
 

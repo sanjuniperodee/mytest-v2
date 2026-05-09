@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Flag,
   ListChecks,
+  Calculator,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -26,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { ExamTimer } from "@/components/exam/timer"
+import { Calculator as ExamCalculator } from "@/components/exam/calculator"
 import { QuestionMedia } from "@/components/exam/question-media"
 import {
   RichText,
@@ -65,6 +67,7 @@ export default function ExamSessionPage({
   const [remaining, setRemaining] = useState<number | null>(null)
   const [showFinish, setShowFinish] = useState(false)
   const [showNav, setShowNav] = useState(false)
+  const [showCalculator, setShowCalculator] = useState(false)
   const [finishing, setFinishing] = useState(false)
   const initRef = useRef(false)
 
@@ -98,12 +101,19 @@ export default function ExamSessionPage({
 
   // Tick down timer
   useEffect(() => {
-    if (remaining == null) return
+    if (remaining == null || remaining <= 0) return
     const id = window.setInterval(() => {
-      setRemaining((r) => (r == null ? r : r - 1))
+      setRemaining((r) => {
+        if (r == null || r <= 1) {
+          clearInterval(id)
+          return 0
+        }
+        return r - 1
+      })
     }, 1000)
     return () => window.clearInterval(id)
-  }, [remaining])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Auto-finish on timeout
   const finish = useCallback(
@@ -226,6 +236,14 @@ export default function ExamSessionPage({
           </Link>
           <div className="flex items-center gap-2">
             <ExamTimer remaining={remaining} />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowCalculator(true)}
+              className="hidden sm:flex"
+            >
+              <Calculator className="size-4" />
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -435,6 +453,8 @@ export default function ExamSessionPage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ExamCalculator open={showCalculator} onClose={() => setShowCalculator(false)} />
     </div>
   )
 }

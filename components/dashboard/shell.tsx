@@ -23,6 +23,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { resolveMediaUrl } from "@/lib/api/client"
 import { localize, type Locale } from "@/lib/api/i18n"
 import { LanguageSwitcher } from "@/components/language-switcher"
+import { WhatsAppFab } from "@/components/common/whatsapp-fab"
 
 const nav = [
   { href: "/dashboard", label: "Обзор", icon: Home },
@@ -195,6 +196,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">{children}</div>
         </main>
       </div>
+
+      <WhatsAppFab />
     </div>
   )
 }

@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { cn } from "@/lib/utils"
 import type {
@@ -35,6 +34,7 @@ import type {
 
 type QuotaType = "GRANT" | "RURAL"
 type Tab = "programs" | "universities"
+type Step = 1 | 2
 
 interface ProfileSubjectOption {
   value: string
@@ -66,6 +66,7 @@ export default function AdmissionPage() {
   const [cycleSlug, setCycleSlug] = useState<string>("")
   const [quotaType, setQuotaType] = useState<QuotaType>("GRANT")
   const [profileSubjects, setProfileSubjects] = useState<string>("")
+  const [step, setStep] = useState<Step>(1)
   const [scores, setScores] = useState<Scores>({
     mathLit: 8,
     readingLit: 8,
@@ -99,14 +100,14 @@ export default function AdmissionPage() {
     profileOptionsKey,
   )
 
-  // Reset/seed profile subjects when options arrive
-  useEffect(() => {
-    if (profileOpts && profileOpts.length > 0) {
-      if (!profileOpts.some((o) => o.value === profileSubjects)) {
-        setProfileSubjects(profileOpts[0].value)
-      }
-    }
-  }, [profileOpts, profileSubjects])
+  const handleProfileSelect = (value: string) => {
+    setProfileSubjects(value)
+    setStep(2)
+  }
+
+  const handleBackToStep1 = () => {
+    setStep(1)
+  }
 
   // Build chance programs query
   const chanceQuery = useMemo(() => {
@@ -139,7 +140,6 @@ export default function AdmissionPage() {
       )
     }
     return [...list].sort((a, b) => {
-      // pass first, then by smallest gap
       if (a.isPass !== b.isPass) return a.isPass ? -1 : 1
       const ga = a.gapToCutoff ?? Number.NEGATIVE_INFINITY
       const gb = b.gapToCutoff ?? Number.NEGATIVE_INFINITY
@@ -214,12 +214,21 @@ export default function AdmissionPage() {
               </ToggleGroup>
             </div>
 
+            {/* Step 1: Profile subjects */}
             <div className="flex flex-col gap-2">
-              <Label>Профильные предметы</Label>
+              <div className="flex items-center gap-2">
+                <span className="flex size-6 items-center justify-center rounded-full bg-foreground text-background text-xs font-semibold">
+                  1
+                </span>
+                <Label>Профильные предметы</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Сначала выберите пару профильных предметов
+              </p>
               {profileLoading ? (
                 <Skeleton className="h-10" />
               ) : (
-                <Select value={profileSubjects} onValueChange={setProfileSubjects}>
+                <Select value={profileSubjects} onValueChange={handleProfileSelect}>
                   <SelectTrigger>
                     <SelectValue placeholder="Выберите пару профильных" />
                   </SelectTrigger>
@@ -234,53 +243,76 @@ export default function AdmissionPage() {
               )}
             </div>
 
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <Label>Баллы ЕНТ</Label>
-                <span
-                  className={cn(
-                    "rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums",
-                    total >= 100
-                      ? "bg-emerald-100 text-emerald-900"
-                      : total >= 70
-                        ? "bg-amber-100 text-amber-900"
-                        : "bg-secondary text-muted-foreground",
-                  )}
-                >
-                  {total}/140
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {SCORE_FIELDS.map((f) => (
-                  <div key={f.key} className="flex flex-col gap-1">
-                    <Label className="text-xs text-muted-foreground" htmlFor={f.key}>
-                      {f.short} ({f.max})
-                    </Label>
-                    <Input
-                      id={f.key}
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={f.max}
-                      value={scores[f.key]}
-                      onChange={(e) => {
-                        const v = Number(e.target.value)
-                        const clamped = Number.isFinite(v)
-                          ? Math.max(0, Math.min(f.max, v))
-                          : 0
-                        setScores((s) => ({ ...s, [f.key]: clamped }))
-                      }}
-                      className="h-10 tabular-nums"
-                    />
+            {/* Step 2: ENT scores — only shown after profileSubjects selected */}
+            {step === 2 && (
+              <>
+                <div className="border-t border-border pt-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="flex size-6 items-center justify-center rounded-full bg-foreground text-background text-xs font-semibold">
+                      2
+                    </span>
+                    <Label>Баллы ЕНТ</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto h-auto p-0 text-xs text-muted-foreground"
+                      onClick={handleBackToStep1}
+                    >
+                      Изменить
+                    </Button>
                   </div>
-                ))}
-              </div>
-            </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      Выбрано: {profileSubjects}
+                    </span>
+                    <span
+                      className={cn(
+                        "rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums",
+                        total >= 100
+                          ? "bg-emerald-100 text-emerald-900"
+                          : total >= 70
+                            ? "bg-amber-100 text-amber-900"
+                            : "bg-secondary text-muted-foreground",
+                      )}
+                    >
+                      {total}/140
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    {SCORE_FIELDS.map((f) => (
+                      <div key={f.key} className="flex flex-col gap-1">
+                        <Label className="text-xs text-muted-foreground" htmlFor={f.key}>
+                          {f.short} ({f.max})
+                        </Label>
+                        <Input
+                          id={f.key}
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          max={f.max}
+                          value={scores[f.key]}
+                          onChange={(e) => {
+                            const v = Number(e.target.value)
+                            const clamped = Number.isFinite(v)
+                              ? Math.max(0, Math.min(f.max, v))
+                              : 0
+                            setScores((s) => ({ ...s, [f.key]: clamped }))
+                          }}
+                          className="h-10 tabular-nums"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
 
-            <div className="rounded-md border border-dashed border-border bg-secondary/40 p-3 text-xs text-muted-foreground">
-              <Sparkles className="mb-1 inline size-3.5" /> Подбор обновляется в реальном
-              времени по мере изменения параметров.
-            </div>
+            {step === 1 && (
+              <div className="rounded-md border border-dashed border-border bg-secondary/40 p-3 text-xs text-muted-foreground">
+                <Sparkles className="mb-1 inline size-3.5" />{" "}
+                Шаг 1 из 2: выберите пару профильных предметов
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -320,7 +352,13 @@ export default function AdmissionPage() {
             </div>
           </div>
 
-          {tab === "programs" ? (
+          {step === 1 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                Сначала выберите пару профильных предметов слева, чтобы увидеть результаты
+              </CardContent>
+            </Card>
+          ) : tab === "programs" ? (
             <ProgramsList
               loading={progLoading}
               programs={filteredPrograms}
@@ -333,6 +371,7 @@ export default function AdmissionPage() {
               quotaType={quotaType}
               scores={scores}
               search={search}
+              profileSubjects={profileSubjects}
             />
           )}
         </div>
@@ -470,17 +509,16 @@ function UniversitiesList({
   quotaType,
   scores,
   search,
+  profileSubjects,
 }: {
   cycleSlug: string
   quotaType: QuotaType
   scores: Scores
   search: string
+  profileSubjects: string
 }) {
-  // Need a programId to query universities — fetch a default by picking the first program from chance results
-  // Practically, we let the user pick a program first
   const [programId, setProgramId] = useState<string>("")
 
-  // Get list of programs for the dropdown (no scores required filter — use admission/programs)
   const { data: programs, isLoading: progLoading } = useSWR<
     { id: string; code: string; name: string }[]
   >(`/admission/programs?take=200`)
