@@ -136,9 +136,14 @@ export const metadata: Metadata = {
   creator: "mytest",
   publisher: "mytest",
   icons: {
-    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    icon: [
+      { url: "/favicon.png", type: "image/png" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/apple-icon.png",
+    shortcut: ["/favicon.png"],
   },
+  manifest: "/manifest.json",
   openGraph: {
     type: "website",
     locale: "ru_RU",
@@ -187,7 +192,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   colorScheme: "light dark",
-  themeColor: "#05070d",
+  themeColor: "#0a0e18",
 }
 
 export default function RootLayout({
