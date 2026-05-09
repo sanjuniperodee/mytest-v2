@@ -14,6 +14,7 @@ const manrope = Manrope({
 })
 
 const instrumentSerif = Instrument_Serif({
+  // @ts-ignore
   subsets: ["latin", "cyrillic"],
   weight: "400",
   style: ["normal", "italic"],
@@ -143,7 +144,6 @@ export const metadata: Metadata = {
     apple: "/icon.svg",
     shortcut: "/favicon.svg",
   },
-  manifest: "/manifest.json",
   openGraph: {
     type: "website",
     locale: "ru_RU",
@@ -220,7 +220,8 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <Providers>{children}</Providers>
         <Toaster richColors closeButton position="top-right" />
-        {process.env.NODE_ENV === "production" && <Analytics />}
+        {process.env.NODE_ENV === "production" &&
+          process.env.NEXT_PUBLIC_ENABLE_VERCEL_ANALYTICS === "true" && <Analytics />}
       </body>
     </html>
   )

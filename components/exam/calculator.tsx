@@ -139,6 +139,8 @@ interface CalculatorProps {
 export function Calculator({ open, onClose }: CalculatorProps) {
   const [state, dispatch] = useReducer(calcReducer, initialState)
   const [mounted, setMounted] = useState(false)
+  /** After touch handling, ignore the synthetic `click` (Telegram / iOS WebView). */
+  const suppressClickUntilMs = useRef(0)
 
   useEffect(() => {
     setMounted(true)
@@ -168,26 +170,41 @@ export function Calculator({ open, onClose }: CalculatorProps) {
       action: CalcAction,
       className = "",
       ariaLabel?: string,
-    ) => (
-      <button
-        type="button"
-        onClick={() => dispatch(action)}
-        aria-label={ariaLabel}
-        className={cn(
-          "flex h-14 w-full touch-manipulation select-none items-center justify-center rounded-lg text-lg font-medium transition-colors active:bg-accent",
-          className,
-        )}
-      >
-        {label}
-      </button>
-    ),
+    ) => {
+      const fire = () => dispatch(action)
+      return (
+        <button
+          type="button"
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            if (e.pointerType === "touch" || e.pointerType === "pen") {
+              e.preventDefault()
+              fire()
+              suppressClickUntilMs.current = Date.now() + 800
+            }
+          }}
+          onClick={(e) => {
+            e.stopPropagation()
+            if (Date.now() < suppressClickUntilMs.current) return
+            fire()
+          }}
+          aria-label={ariaLabel}
+          className={cn(
+            "flex h-14 w-full cursor-pointer touch-manipulation select-none items-center justify-center rounded-lg text-lg font-medium transition-colors active:bg-accent",
+            className,
+          )}
+        >
+          {label}
+        </button>
+      )
+    },
     [],
   )
 
   if (!mounted || !open) return null
 
   return createPortal(
-    <>
+    <div data-no-translate className="contents">
       <div
         className="fixed inset-0 z-[200] bg-black/50"
         aria-hidden
@@ -197,7 +214,7 @@ export function Calculator({ open, onClose }: CalculatorProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="exam-calculator-title"
-        className="fixed left-1/2 top-1/2 z-[201] w-[min(100vw-1rem,20rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-0 shadow-2xl"
+        className="fixed left-1/2 top-1/2 z-[210] w-[min(100vw-1rem,20rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background p-0 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative border-b border-border px-4 pb-3 pt-4">
@@ -242,7 +259,7 @@ export function Calculator({ open, onClose }: CalculatorProps) {
           {pad(".", { type: "dot" })}
         </div>
       </div>
-    </>,
+    </div>,
     document.body,
   )
 }

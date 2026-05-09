@@ -57,7 +57,7 @@ export default function ExamSessionPage({
   const router = useRouter()
   const { user } = useAuth()
   const locale = ((user?.preferredLanguage as Locale) || "ru") as Locale
-  const { data: session, isLoading, error } = useSWR<TestSession>(
+  const { data: session, isLoading, error, mutate: revalidateSession } = useSWR<TestSession>(
     `/tests/sessions/${sessionId}`,
   )
 
@@ -73,6 +73,8 @@ export default function ExamSessionPage({
   const timeoutFinishRef = useRef(false)
   /** Wall-clock end for countdown (survives background throttling / Telegram WebView). */
   const timerEndMsRef = useRef<number | null>(null)
+  /** Last `timeRemaining` (seconds) we synced from the server into the wall-clock deadline. */
+  const syncedServerRemainingRef = useRef<number | null>(null)
   const [timerEpoch, setTimerEpoch] = useState(0)
 
   const flat = useMemo<FlatSessionQuestion[]>(() => {
@@ -84,6 +86,7 @@ export default function ExamSessionPage({
     const s = Math.max(0, Math.floor(Number(totalSeconds)))
     if (!Number.isFinite(s)) return
     timerEndMsRef.current = Date.now() + s * 1000
+    syncedServerRemainingRef.current = s
     setRemaining(s)
     setTimerEpoch((n) => n + 1)
   }, [])
@@ -93,13 +96,14 @@ export default function ExamSessionPage({
     initRef.current = false
     timeoutFinishRef.current = false
     timerEndMsRef.current = null
+    syncedServerRemainingRef.current = null
     setRemaining(null)
     setAnswers({})
     setActiveIdx(0)
     setTimerEpoch((n) => n + 1)
   }, [sessionId])
 
-  // Initialise local state from server data once
+  // Initialise local answers once per session load (timer sync is separate — see below)
   useEffect(() => {
     if (!session || session.id !== sessionId || initRef.current) return
     initRef.current = true
@@ -110,11 +114,23 @@ export default function ExamSessionPage({
       }
     }
     setAnswers(initial)
-    if (session.timeRemaining != null && session.timeRemaining !== undefined) {
-      const tr = Number(session.timeRemaining)
-      if (Number.isFinite(tr)) armCountdown(tr)
+  }, [session, sessionId, flat])
+
+  // Wall-clock deadline from server (runs when SWR gets timeRemaining; skips duplicate snapshots)
+  useEffect(() => {
+    if (!session || session.id !== sessionId) return
+    if (session.status !== "in_progress") return
+    if (session.timeRemaining == null || session.timeRemaining === undefined) return
+    const tr = Math.max(0, Math.floor(Number(session.timeRemaining)))
+    if (!Number.isFinite(tr)) return
+    if (
+      syncedServerRemainingRef.current === tr &&
+      timerEndMsRef.current != null
+    ) {
+      return
     }
-  }, [session, sessionId, flat, armCountdown])
+    armCountdown(tr)
+  }, [session, sessionId, armCountdown])
 
   // Redirect already-finished session to review
   useEffect(() => {
@@ -146,6 +162,25 @@ export default function ExamSessionPage({
       document.removeEventListener("visibilitychange", onVis)
     }
   }, [sessionId, timerEpoch])
+
+  // Telegram / WebView: таймеры могут «замирать»; при возврате на экран подтягиваем время с сервера
+  useEffect(() => {
+    const syncFromServer = () => {
+      if (document.visibilityState !== "visible") return
+      void revalidateSession().then((data) => {
+        const s = data as TestSession | undefined
+        if (s?.status === "in_progress" && s.timeRemaining != null) {
+          armCountdown(Number(s.timeRemaining))
+        }
+      })
+    }
+    document.addEventListener("visibilitychange", syncFromServer)
+    window.addEventListener("focus", syncFromServer)
+    return () => {
+      document.removeEventListener("visibilitychange", syncFromServer)
+      window.removeEventListener("focus", syncFromServer)
+    }
+  }, [revalidateSession, armCountdown])
 
   // Auto-finish on timeout
   const finish = useCallback(

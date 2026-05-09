@@ -28,6 +28,7 @@ export function ExamTimer({
   const isWarning = secs <= 300 && !isCritical
   return (
     <div
+      data-no-translate
       className={cn(
         "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-semibold tabular-nums transition-colors",
         isCritical
