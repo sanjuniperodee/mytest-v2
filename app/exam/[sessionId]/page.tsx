@@ -135,7 +135,8 @@ export default function ExamSessionPage({
         timerRef.current = null
       }
     }
-  }, [remaining])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally empty — interval captures state via functional update
 
   // Auto-finish on timeout
   const finish = useCallback(
