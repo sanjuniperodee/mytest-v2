@@ -100,10 +100,17 @@ export default function ExamSessionPage({
   }, [session, sessionId, router])
 
   const timerRef = useRef<number | null>(null)
+  const remainingRef = useRef<number | null>(null)
 
-  // Tick down timer — start interval when remaining first becomes non-null
+  // Keep ref in sync with state
   useEffect(() => {
-    if (remaining == null || remaining <= 0) {
+    remainingRef.current = remaining
+  }, [remaining])
+
+  // Start/stop timer when remaining becomes non-null or goes to 0
+  useEffect(() => {
+    if (remaining == null) return
+    if (remaining <= 0) {
       if (timerRef.current !== null) {
         clearInterval(timerRef.current)
         timerRef.current = null
@@ -111,19 +118,23 @@ export default function ExamSessionPage({
       return
     }
 
-    // Clear any stale interval before starting a new one
-    if (timerRef.current !== null) {
-      clearInterval(timerRef.current)
-    }
+    // Already running — don't restart
+    if (timerRef.current !== null) return
+
     timerRef.current = window.setInterval(() => {
-      setRemaining((r) => {
-        if (r == null || r <= 1) {
-          clearInterval(timerRef.current!)
+      const current = remainingRef.current
+      if (current == null || current <= 1) {
+        if (timerRef.current !== null) {
+          clearInterval(timerRef.current)
           timerRef.current = null
-          return 0
         }
-        return r - 1
-      })
+        remainingRef.current = 0
+        setRemaining(0)
+        return
+      }
+      const next = current - 1
+      remainingRef.current = next
+      setRemaining(next)
     }, 1000)
 
     return () => {
