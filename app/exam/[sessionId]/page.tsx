@@ -99,21 +99,40 @@ export default function ExamSessionPage({
     }
   }, [session, sessionId, router])
 
-  // Tick down timer
+  const timerRef = useRef<number | null>(null)
+
+  // Tick down timer — start interval when remaining first becomes non-null
   useEffect(() => {
-    if (remaining == null || remaining <= 0) return
-    const id = window.setInterval(() => {
+    if (remaining == null || remaining <= 0) {
+      if (timerRef.current !== null) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+      return
+    }
+
+    // Clear any stale interval before starting a new one
+    if (timerRef.current !== null) {
+      clearInterval(timerRef.current)
+    }
+    timerRef.current = window.setInterval(() => {
       setRemaining((r) => {
         if (r == null || r <= 1) {
-          clearInterval(id)
+          clearInterval(timerRef.current!)
+          timerRef.current = null
           return 0
         }
         return r - 1
       })
     }, 1000)
-    return () => window.clearInterval(id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+
+    return () => {
+      if (timerRef.current !== null) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }, [remaining])
 
   // Auto-finish on timeout
   const finish = useCallback(
