@@ -100,29 +100,24 @@ export default function ExamSessionPage({
   }, [session, sessionId, router])
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timerStartedRef = useRef(false)
 
-  // Simple: tick every second, read from state via functional update
+  // Start interval when remaining first becomes non-null (after session loads)
+  // Don't re-run when remaining ticks change — just clean up when it hits 0
   useEffect(() => {
-    if (remaining == null || remaining <= 0) {
-      if (timerRef.current !== null) {
-        clearInterval(timerRef.current)
-        timerRef.current = null
-      }
+    if (remaining == null) return
+
+    if (timerStartedRef.current && timerRef.current !== null) {
+      // already running, no need to restart
       return
     }
-
-    // Clear old interval first
-    if (timerRef.current !== null) {
-      clearInterval(timerRef.current)
-    }
+    timerStartedRef.current = true
 
     timerRef.current = setInterval(() => {
       setRemaining((prev) => {
         if (prev == null || prev <= 1) {
-          if (timerRef.current !== null) {
-            clearInterval(timerRef.current)
-            timerRef.current = null
-          }
+          clearInterval(timerRef.current!)
+          timerRef.current = null
           return 0
         }
         return prev - 1
@@ -135,8 +130,7 @@ export default function ExamSessionPage({
         timerRef.current = null
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // intentionally empty — interval captures state via functional update
+  }, [remaining])
 
   // Auto-finish on timeout
   const finish = useCallback(
