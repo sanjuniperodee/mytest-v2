@@ -13,10 +13,13 @@ const BASE = "/api/v1"
 export class ApiError extends Error {
   status: number
   body: unknown
-  constructor(status: number, message: string, body: unknown) {
+  /** Сервер может вернуть поле code (Nest HttpException payload). */
+  code?: string
+  constructor(status: number, message: string, body: unknown, code?: string) {
     super(message)
     this.status = status
     this.body = body
+    this.code = code
   }
 }
 
@@ -112,11 +115,34 @@ export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Pro
   const payload = isJson ? await res.json().catch(() => null) : await res.text().catch(() => null)
 
   if (!res.ok) {
+    const bodyObj =
+      isJson && payload !== null && typeof payload === "object"
+        ? (payload as Record<string, unknown>)
+        : null
+    const rawMsg = bodyObj?.message
     const message =
-      (isJson && payload && typeof payload === "object" && "message" in payload
-        ? String((payload as { message: unknown }).message)
-        : null) || res.statusText || "Request failed"
-    throw new ApiError(res.status, message, payload)
+      typeof rawMsg === "string"
+        ? rawMsg
+        : Array.isArray(rawMsg)
+          ? rawMsg.filter((x) => typeof x === "string").join(". ")
+          : typeof rawMsg === "number"
+            ? String(rawMsg)
+            : res.statusText || "Request failed"
+    const nested =
+      rawMsg !== null &&
+      typeof rawMsg === "object" &&
+      !Array.isArray(rawMsg) &&
+      "message" in (rawMsg as object)
+        ? (rawMsg as { message?: string }).message
+        : undefined
+    const displayMessage = nested || message
+    const code =
+      typeof bodyObj?.code === "string"
+        ? bodyObj.code
+        : typeof (rawMsg as Record<string, unknown> | undefined)?.code === "string"
+          ? String((rawMsg as Record<string, unknown>).code)
+          : undefined
+    throw new ApiError(res.status, displayMessage, payload, code)
   }
 
   return payload as T
