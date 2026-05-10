@@ -37,10 +37,69 @@ import {
 import { Logo } from "@/components/landing/logo"
 import { api, ApiError } from "@/lib/api/client"
 import { useAuth } from "@/lib/api/auth-context"
-import { localize, type Locale } from "@/lib/api/i18n"
+import type { Locale } from "@/lib/api/i18n"
+import { localize } from "@/lib/api/i18n"
 import { flattenSessionQuestions, type FlatSessionQuestion } from "@/lib/api/test-session"
 import { cn } from "@/lib/utils"
 import type { TestSession } from "@/lib/api/types"
+
+const TELEGRAM_CHANNEL_URL =
+  process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL ?? "https://t.me/bilimilimland"
+
+function isChannelSubscriptionError(err: unknown): boolean {
+  if (!(err instanceof ApiError) || err.status !== 403) return false
+  if (err.code === "TELEGRAM_CHANNEL_REQUIRED") return true
+  const m = (err.message || "").toLowerCase()
+  return (
+    m.includes("channel subscription") ||
+    m.includes("telegram channel membership")
+  )
+}
+
+const SESSION_LOAD_ERR: Record<Locale, { title: string; fallback: string; catalog: string }> = {
+  ru: {
+    title: "Не удалось загрузить сессию",
+    fallback: "Попробуйте обновить страницу.",
+    catalog: "К каталогу",
+  },
+  kk: {
+    title: "Сессияны жүктеу мүмкін болмады",
+    fallback: "Бетті жаңартып көріңіз.",
+    catalog: "Каталогқа",
+  },
+  en: {
+    title: "Could not load session",
+    fallback: "Try refreshing the page.",
+    catalog: "Back to catalog",
+  },
+}
+
+const CHANNEL_GATE_ERR: Record<
+  Locale,
+  { headline: string; hint: string; openChannel: string; recheck: string; catalog: string }
+> = {
+  ru: {
+    headline: "Нужна подписка на канал",
+    hint: "Подпишитесь на канал школы в Telegram, затем нажмите «Проверить подписку». Важно пользоваться тем же аккаунтом Telegram, с которым вы вошли в приложение.",
+    openChannel: "Открыть канал",
+    recheck: "Проверить подписку",
+    catalog: "К каталогу",
+  },
+  kk: {
+    headline: "Telegram арнасына жазылу қажет",
+    hint: "Мектептің Telegram-арнасына жазылыңыз, содан кейін «Жазылымды тексеру» батырмасын басыңыз. Кірген аккаунтпен қолданылатын Telegram бірдей болуы керек.",
+    openChannel: "Арнаны ашу",
+    recheck: "Жазылымды тексеру",
+    catalog: "Каталогқа",
+  },
+  en: {
+    headline: "Subscribe to our Telegram channel",
+    hint: "Join the channel, then tap “Check subscription”. Use the same Telegram account you logged in with.",
+    openChannel: "Open channel",
+    recheck: "Check subscription",
+    catalog: "Back to catalog",
+  },
+}
 
 interface AnswerResponse {
   id: string
