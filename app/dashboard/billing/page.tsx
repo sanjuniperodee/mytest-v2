@@ -1,12 +1,15 @@
 "use client"
 
 import useSWR from "swr"
-import { ArrowRight, Check, Crown, Sparkles, ShieldCheck } from "lucide-react"
+import { ArrowRight, Check, Crown, Sparkles, ShieldCheck, Loader2 } from "lucide-react"
+import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import { useAuth } from "@/lib/api/auth-context"
+import { api } from "@/lib/api/client"
 import { localize, type Locale } from "@/lib/api/i18n"
 import { cn } from "@/lib/utils"
 import type { AccessByExamItem, BillingPlan, CurrentTariff, TrialStatusItem, User } from "@/lib/api/types"
@@ -137,8 +140,8 @@ export default function BillingPage() {
             <ShieldCheck className="size-4" />
           </div>
           <p>
-            Для оплаты откройте WhatsApp: мы выставим счёт и подключим Premium после
-            подтверждения платежа.
+            Оплата через Kaspi: нажмите «Оформить», введите номер телефона из приложения Kaspi —
+            и оплатите выставленный счёт напрямую.
           </p>
         </CardContent>
       </Card>
@@ -169,8 +172,40 @@ function PlanCard({
   user: User | null
   locale: Locale
 }) {
-  const onCheckout = () => {
-    window.open(buildWhatsAppPaymentUrl(plan, user, locale), "_blank", "noopener,noreferrer")
+  const [showModal, setShowModal] = useState(false)
+  const [phone, setPhone] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const onCheckout = async () => {
+    const userPhone = typeof user?.phone === "string" ? user.phone.trim() : ""
+    setPhone(userPhone)
+    setShowModal(true)
+    setError(null)
+  }
+
+  const handleKaspiCheckout = async () => {
+    const digits = phone.replace(/\D/g, "")
+    if (digits.length < 10) {
+      setError("Введите корректный номер телефона")
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await api<{ receiptUrl: string }>("/billing/kaspi/checkout", {
+        method: "POST",
+        body: { planId: plan.id, phoneNumber: digits },
+      })
+      if (result.receiptUrl) {
+        window.open(result.receiptUrl, "_blank", "noopener,noreferrer")
+      }
+      setShowModal(false)
+    } catch (err) {
+      setError("Ошибка при создании счёта. Попробуйте ещё раз.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const features =
@@ -190,101 +225,135 @@ function PlanCard({
       : null
 
   return (
-    <Card
-      className={cn(
-        "relative flex flex-col overflow-hidden transition-all duration-200",
-        highlighted
-          ? "border-foreground shadow-lg ring-1 ring-foreground/10"
-          : "hover:border-foreground/40 hover:shadow-md",
-      )}
-    >
-      {plan.badge && (
-        <div className="absolute right-4 top-4 z-10">
-          <Badge className="bg-accent text-accent-foreground hover:bg-accent capitalize">
-            {plan.badge}
-          </Badge>
-        </div>
-      )}
-      {highlighted && !plan.badge && (
-        <div className="absolute right-4 top-4 z-10">
-          <Badge className="bg-foreground text-background hover:bg-foreground">
-            Рекомендуем
-          </Badge>
-        </div>
-      )}
-      {current && (
-        <div className="absolute left-4 top-4 z-10">
-          <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-            Текущий
-          </Badge>
-        </div>
-      )}
-      <CardContent className="flex flex-1 flex-col gap-5 p-6">
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            {plan.code}
-          </p>
-          <p className="text-xl font-semibold">{plan.name}</p>
-          {plan.description && (
-            <p className="text-sm text-muted-foreground">{plan.description}</p>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <span className="text-4xl font-semibold tabular-nums">{formatPrice(plan)}</span>
-            {oldPriceLabel && (
-              <span className="text-sm text-muted-foreground line-through tabular-nums">
-                {oldPriceLabel}
-              </span>
-            )}
-            {discountPct != null && discountPct > 0 && (
-              <Badge variant="outline" className="border-accent/30 bg-accent/10 text-accent">
-                −{discountPct}%
-              </Badge>
+    <>
+      <Card
+        className={cn(
+          "relative flex flex-col overflow-hidden transition-all duration-200",
+          highlighted
+            ? "border-foreground shadow-lg ring-1 ring-foreground/10"
+            : "hover:border-foreground/40 hover:shadow-md",
+        )}
+      >
+        {plan.badge && (
+          <div className="absolute right-4 top-4 z-10">
+            <Badge className="bg-accent text-accent-foreground hover:bg-accent capitalize">
+              {plan.badge}
+            </Badge>
+          </div>
+        )}
+        {highlighted && !plan.badge && (
+          <div className="absolute right-4 top-4 z-10">
+            <Badge className="bg-foreground text-background hover:bg-foreground">
+              Рекомендуем
+            </Badge>
+          </div>
+        )}
+        {current && (
+          <div className="absolute left-4 top-4 z-10">
+            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+              Текущий
+            </Badge>
+          </div>
+        )}
+        <CardContent className="flex flex-1 flex-col gap-5 p-6">
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {plan.code}
+            </p>
+            <p className="text-xl font-semibold">{plan.name}</p>
+            {plan.description && (
+              <p className="text-sm text-muted-foreground">{plan.description}</p>
             )}
           </div>
-          {plan.durationDays && (
-            <p className="text-xs text-muted-foreground">
-              Срок действия: {plan.durationDays}{" "}
-              {plan.durationDays === 1
-                ? "день"
-                : plan.durationDays < 5
-                  ? "дня"
-                  : "дней"}
-            </p>
-          )}
+
+          <div className="flex flex-col gap-1">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="text-4xl font-semibold tabular-nums">{formatPrice(plan)}</span>
+              {oldPriceLabel && (
+                <span className="text-sm text-muted-foreground line-through tabular-nums">
+                  {oldPriceLabel}
+                </span>
+              )}
+              {discountPct != null && discountPct > 0 && (
+                <Badge variant="outline" className="border-accent/30 bg-accent/10 text-accent">
+                  −{discountPct}%
+                </Badge>
+              )}
+            </div>
+            {plan.durationDays && (
+              <p className="text-xs text-muted-foreground">
+                Срок действия: {plan.durationDays}{" "}
+                {plan.durationDays === 1
+                  ? "день"
+                  : plan.durationDays < 5
+                    ? "дня"
+                    : "дней"}
+              </p>
+            )}
+          </div>
+
+          <ul className="flex flex-1 flex-col gap-2 text-sm">
+            {features.map((f, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <Check className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+
+          <Button
+            onClick={onCheckout}
+            disabled={current}
+            variant={highlighted ? "default" : "outline"}
+            className="h-11"
+          >
+            {current ? (
+              <>
+                <Check className="size-4" />
+                Текущий тариф
+              </>
+            ) : (
+              <>
+                Оформить
+                <ArrowRight className="size-4" />
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <Card className="w-full max-w-sm mx-4">
+            <CardContent className="flex flex-col gap-4 p-6">
+              <p className="text-lg font-semibold">Оплата через Kaspi</p>
+              <p className="text-sm text-muted-foreground">
+                Выберите тариф «{plan.name}» на сумму {formatPrice(plan)}
+              </p>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium">Номер телефона в Kaspi</label>
+                <Input
+                  type="tel"
+                  placeholder="+7 (700) 123-45-67"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className={cn(error && "border-red-500")}
+                />
+                {error && <p className="text-xs text-red-500">{error}</p>}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowModal(false)} disabled={loading}>
+                  Отмена
+                </Button>
+                <Button onClick={handleKaspiCheckout} disabled={loading} className="flex-1">
+                  {loading ? <Loader2 className="size-4 animate-spin" /> : "Выставить счёт"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-
-        <ul className="flex flex-1 flex-col gap-2 text-sm">
-          {features.map((f, i) => (
-            <li key={i} className="flex items-start gap-2">
-              <Check className="mt-0.5 size-4 shrink-0 text-emerald-600" />
-              <span>{f}</span>
-            </li>
-          ))}
-        </ul>
-
-        <Button
-          onClick={onCheckout}
-          disabled={current}
-          variant={highlighted ? "default" : "outline"}
-          className="h-11"
-        >
-          {current ? (
-            <>
-              <Check className="size-4" />
-              Текущий тариф
-            </>
-          ) : (
-            <>
-              Оформить
-              <ArrowRight className="size-4" />
-            </>
-          )}
-        </Button>
-      </CardContent>
-    </Card>
+      )}
+    </>
   )
 }
 
