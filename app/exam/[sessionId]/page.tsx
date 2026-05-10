@@ -13,6 +13,7 @@ import {
   Flag,
   ListChecks,
   Calculator,
+  ExternalLink,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -114,12 +115,13 @@ export default function ExamSessionPage({
 }) {
   const { sessionId } = use(params)
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, refresh } = useAuth()
   const locale = ((user?.preferredLanguage as Locale) || "ru") as Locale
   const { data: session, isLoading, error, mutate: revalidateSession } = useSWR<TestSession>(
     `/tests/sessions/${sessionId}`,
   )
 
+  const [channelRechecking, setChannelRechecking] = useState(false)
   const [answers, setAnswers] = useState<Record<string, string[]>>({})
   const [activeIdx, setActiveIdx] = useState(0)
   const [savingId, setSavingId] = useState<string | null>(null)
@@ -140,6 +142,16 @@ export default function ExamSessionPage({
     if (!session) return []
     return flattenSessionQuestions(session, locale)
   }, [session, locale])
+
+  const retrySessionAfterChannelSync = useCallback(async () => {
+    setChannelRechecking(true)
+    try {
+      await refresh()
+      await revalidateSession()
+    } finally {
+      setChannelRechecking(false)
+    }
+  }, [refresh, revalidateSession])
 
   const armCountdown = useCallback((totalSeconds: number) => {
     const s = Math.max(0, Math.floor(Number(totalSeconds)))
@@ -318,17 +330,53 @@ export default function ExamSessionPage({
   }
 
   if (error) {
+    const errCopy = SESSION_LOAD_ERR[locale] ?? SESSION_LOAD_ERR.ru
+    const channelBlocked = isChannelSubscriptionError(error)
+    const chCopy = CHANNEL_GATE_ERR[locale] ?? CHANNEL_GATE_ERR.ru
+    const apiErr = error as ApiError
+
     return (
       <div className="mx-auto max-w-md p-6 text-center">
         <Card>
-          <CardContent className="py-10 flex flex-col items-center gap-3">
+          <CardContent
+            data-no-translate
+            className="flex flex-col items-center gap-3 py-10 text-balance"
+          >
             <AlertTriangle className="size-8 text-rose-500" />
-            <p className="font-semibold">Не удалось загрузить сессию</p>
-            <p className="text-sm text-muted-foreground">
-              {(error as ApiError).message || "Попробуйте обновить страницу"}
-            </p>
-            <Button asChild>
-              <Link href="/dashboard/exams">К каталогу</Link>
+            {channelBlocked ? (
+              <>
+                <p className="font-semibold">{chCopy.headline}</p>
+                <p className="text-muted-foreground text-sm leading-relaxed">{chCopy.hint}</p>
+                <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-center">
+                  <Button variant="outline" className="w-full sm:flex-1" asChild>
+                    <a href={TELEGRAM_CHANNEL_URL} target="_blank" rel="noreferrer noopener">
+                      <ExternalLink className="mr-2 size-4 shrink-0" />
+                      {chCopy.openChannel}
+                    </a>
+                  </Button>
+                  <Button
+                    className="w-full sm:flex-1"
+                    disabled={channelRechecking}
+                    onClick={() => void retrySessionAfterChannelSync()}
+                  >
+                    {channelRechecking ? (
+                      <Spinner className="size-4" />
+                    ) : (
+                      chCopy.recheck
+                    )}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold">{errCopy.title}</p>
+                <p className="text-muted-foreground text-sm">
+                  {apiErr.message || errCopy.fallback}
+                </p>
+              </>
+            )}
+            <Button asChild className={channelBlocked ? "mt-2" : undefined}>
+              <Link href="/dashboard/exams">{channelBlocked ? chCopy.catalog : errCopy.catalog}</Link>
             </Button>
           </CardContent>
         </Card>
