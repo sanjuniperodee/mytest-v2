@@ -22,7 +22,7 @@ const instrumentSerif = Instrument_Serif({
   display: "swap",
 })
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mytest.kz"
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://my-test.kz"
 
 const websiteSchema = {
   "@context": "https://schema.org",

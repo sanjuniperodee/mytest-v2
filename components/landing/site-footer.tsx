@@ -90,19 +90,22 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="mt-16 flex flex-col items-start justify-between gap-4 border-t border-border pt-6 sm:flex-row sm:items-center">
+          <div className="mt-16 flex flex-col items-start justify-between gap-4 border-t border-border pt-6 sm:flex-row sm:items-center">
           <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} mytest. Алматы, Казахстан.
+            © {new Date().getFullYear()} mytest. Алматы, Казахстан. Все права защищены.
           </p>
-          <div className="flex items-center gap-5 text-xs text-muted-foreground">
-            <a href="#" className="hover:text-foreground">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+            <a href="/terms" className="hover:text-foreground">
               Условия
             </a>
-            <a href="#" className="hover:text-foreground">
+            <a href="/privacy" className="hover:text-foreground">
               Конфиденциальность
             </a>
-            <a href="#" className="hover:text-foreground">
-              Оферта
+            <a href="/support" className="hover:text-foreground">
+              Поддержка
+            </a>
+            <a href="/mobile" className="hover:text-foreground">
+              Приложение
             </a>
           </div>
         </div>
