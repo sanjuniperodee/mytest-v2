@@ -201,8 +201,13 @@ function PlanCard({
         window.open(result.receiptUrl, "_blank", "noopener,noreferrer")
       }
       setShowModal(false)
-    } catch (err) {
-      setError("Ошибка при создании счёта. Попробуйте ещё раз.")
+    } catch (err: unknown) {
+      const msg = err && typeof err === "object" && "message" in err ? String((err as { message: unknown }).message) : String(err)
+      if (msg.includes("KASPI_NOT_AUTHENTICATED")) {
+        setError("Kaspi не авторизован. Обратитесь к поддержке.")
+      } else {
+        setError("Ошибка при создании счёта. Попробуйте ещё раз.")
+      }
     } finally {
       setLoading(false)
     }
