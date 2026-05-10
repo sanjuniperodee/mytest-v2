@@ -1,8 +1,9 @@
 "use client"
 
 import useSWR from "swr"
+import Link from "next/link"
 import { ArrowRight, Check, Crown, Sparkles, ShieldCheck, Loader2 } from "lucide-react"
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -175,7 +176,7 @@ function PlanCard({
   const [showModal, setShowModal] = useState(false)
   const [phone, setPhone] = useState("")
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<ReactNode | null>(null)
 
   const onCheckout = async () => {
     const userPhone = typeof user?.phone === "string" ? user.phone.trim() : ""
@@ -204,7 +205,15 @@ function PlanCard({
     } catch (err: unknown) {
       const msg = err && typeof err === "object" && "message" in err ? String((err as { message: unknown }).message) : String(err)
       if (msg.includes("KASPI_NOT_AUTHENTICATED")) {
-        setError("Kaspi не авторизован. Обратитесь к поддержке.")
+        setError(
+          <>
+            Kaspi не авторизован.{" "}
+            <Link href="/dashboard/kaspi-setup" className="font-medium underline underline-offset-2">
+              Настроить сессию
+            </Link>
+            {" или обратитесь к поддержке."}
+          </>,
+        )
       } else {
         setError("Ошибка при создании счёта. Попробуйте ещё раз.")
       }
